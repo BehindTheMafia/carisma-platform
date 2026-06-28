@@ -16,6 +16,7 @@ import { Route as AuthenticatedVehiculosRouteImport } from './routes/_authentica
 import { Route as AuthenticatedSegurosRouteImport } from './routes/_authenticated/seguros'
 import { Route as AuthenticatedRentasRouteImport } from './routes/_authenticated/rentas'
 import { Route as AuthenticatedPagosRouteImport } from './routes/_authenticated/pagos'
+import { Route as AuthenticatedMultasRouteImport } from './routes/_authenticated/multas'
 import { Route as AuthenticatedMantenimientosRouteImport } from './routes/_authenticated/mantenimientos'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedContratosRouteImport } from './routes/_authenticated/contratos'
@@ -55,6 +56,11 @@ const AuthenticatedPagosRoute = AuthenticatedPagosRouteImport.update({
   path: '/pagos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedMultasRoute = AuthenticatedMultasRouteImport.update({
+  id: '/multas',
+  path: '/multas',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedMantenimientosRoute =
   AuthenticatedMantenimientosRouteImport.update({
     id: '/mantenimientos',
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/contratos': typeof AuthenticatedContratosRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/mantenimientos': typeof AuthenticatedMantenimientosRoute
+  '/multas': typeof AuthenticatedMultasRoute
   '/pagos': typeof AuthenticatedPagosRoute
   '/rentas': typeof AuthenticatedRentasRoute
   '/seguros': typeof AuthenticatedSegurosRoute
@@ -96,6 +103,7 @@ export interface FileRoutesByTo {
   '/contratos': typeof AuthenticatedContratosRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/mantenimientos': typeof AuthenticatedMantenimientosRoute
+  '/multas': typeof AuthenticatedMultasRoute
   '/pagos': typeof AuthenticatedPagosRoute
   '/rentas': typeof AuthenticatedRentasRoute
   '/seguros': typeof AuthenticatedSegurosRoute
@@ -110,6 +118,7 @@ export interface FileRoutesById {
   '/_authenticated/contratos': typeof AuthenticatedContratosRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/mantenimientos': typeof AuthenticatedMantenimientosRoute
+  '/_authenticated/multas': typeof AuthenticatedMultasRoute
   '/_authenticated/pagos': typeof AuthenticatedPagosRoute
   '/_authenticated/rentas': typeof AuthenticatedRentasRoute
   '/_authenticated/seguros': typeof AuthenticatedSegurosRoute
@@ -124,6 +133,7 @@ export interface FileRouteTypes {
     | '/contratos'
     | '/dashboard'
     | '/mantenimientos'
+    | '/multas'
     | '/pagos'
     | '/rentas'
     | '/seguros'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/contratos'
     | '/dashboard'
     | '/mantenimientos'
+    | '/multas'
     | '/pagos'
     | '/rentas'
     | '/seguros'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/_authenticated/contratos'
     | '/_authenticated/dashboard'
     | '/_authenticated/mantenimientos'
+    | '/_authenticated/multas'
     | '/_authenticated/pagos'
     | '/_authenticated/rentas'
     | '/_authenticated/seguros'
@@ -212,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPagosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/multas': {
+      id: '/_authenticated/multas'
+      path: '/multas'
+      fullPath: '/multas'
+      preLoaderRoute: typeof AuthenticatedMultasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/mantenimientos': {
       id: '/_authenticated/mantenimientos'
       path: '/mantenimientos'
@@ -248,6 +267,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedContratosRoute: typeof AuthenticatedContratosRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedMantenimientosRoute: typeof AuthenticatedMantenimientosRoute
+  AuthenticatedMultasRoute: typeof AuthenticatedMultasRoute
   AuthenticatedPagosRoute: typeof AuthenticatedPagosRoute
   AuthenticatedRentasRoute: typeof AuthenticatedRentasRoute
   AuthenticatedSegurosRoute: typeof AuthenticatedSegurosRoute
@@ -259,6 +279,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedContratosRoute: AuthenticatedContratosRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedMantenimientosRoute: AuthenticatedMantenimientosRoute,
+  AuthenticatedMultasRoute: AuthenticatedMultasRoute,
   AuthenticatedPagosRoute: AuthenticatedPagosRoute,
   AuthenticatedRentasRoute: AuthenticatedRentasRoute,
   AuthenticatedSegurosRoute: AuthenticatedSegurosRoute,
