@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedVehiculosRouteImport } from './routes/_authenticated/vehiculos'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
 import { Route as AuthenticatedSegurosRouteImport } from './routes/_authenticated/seguros'
+import { Route as AuthenticatedReportesRouteImport } from './routes/_authenticated/reportes'
 import { Route as AuthenticatedRentasRouteImport } from './routes/_authenticated/rentas'
 import { Route as AuthenticatedPagosRouteImport } from './routes/_authenticated/pagos'
 import { Route as AuthenticatedMultasRouteImport } from './routes/_authenticated/multas'
@@ -52,6 +53,11 @@ const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
 const AuthenticatedSegurosRoute = AuthenticatedSegurosRouteImport.update({
   id: '/seguros',
   path: '/seguros',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedReportesRoute = AuthenticatedReportesRouteImport.update({
+  id: '/reportes',
+  path: '/reportes',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedRentasRoute = AuthenticatedRentasRouteImport.update({
@@ -115,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/multas': typeof AuthenticatedMultasRoute
   '/pagos': typeof AuthenticatedPagosRoute
   '/rentas': typeof AuthenticatedRentasRoute
+  '/reportes': typeof AuthenticatedReportesRoute
   '/seguros': typeof AuthenticatedSegurosRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
   '/vehiculos': typeof AuthenticatedVehiculosRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/multas': typeof AuthenticatedMultasRoute
   '/pagos': typeof AuthenticatedPagosRoute
   '/rentas': typeof AuthenticatedRentasRoute
+  '/reportes': typeof AuthenticatedReportesRoute
   '/seguros': typeof AuthenticatedSegurosRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
   '/vehiculos': typeof AuthenticatedVehiculosRoute
@@ -149,6 +157,7 @@ export interface FileRoutesById {
   '/_authenticated/multas': typeof AuthenticatedMultasRoute
   '/_authenticated/pagos': typeof AuthenticatedPagosRoute
   '/_authenticated/rentas': typeof AuthenticatedRentasRoute
+  '/_authenticated/reportes': typeof AuthenticatedReportesRoute
   '/_authenticated/seguros': typeof AuthenticatedSegurosRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
   '/_authenticated/vehiculos': typeof AuthenticatedVehiculosRoute
@@ -167,6 +176,7 @@ export interface FileRouteTypes {
     | '/multas'
     | '/pagos'
     | '/rentas'
+    | '/reportes'
     | '/seguros'
     | '/usuarios'
     | '/vehiculos'
@@ -183,6 +193,7 @@ export interface FileRouteTypes {
     | '/multas'
     | '/pagos'
     | '/rentas'
+    | '/reportes'
     | '/seguros'
     | '/usuarios'
     | '/vehiculos'
@@ -200,6 +211,7 @@ export interface FileRouteTypes {
     | '/_authenticated/multas'
     | '/_authenticated/pagos'
     | '/_authenticated/rentas'
+    | '/_authenticated/reportes'
     | '/_authenticated/seguros'
     | '/_authenticated/usuarios'
     | '/_authenticated/vehiculos'
@@ -253,6 +265,13 @@ declare module '@tanstack/react-router' {
       path: '/seguros'
       fullPath: '/seguros'
       preLoaderRoute: typeof AuthenticatedSegurosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/reportes': {
+      id: '/_authenticated/reportes'
+      path: '/reportes'
+      fullPath: '/reportes'
+      preLoaderRoute: typeof AuthenticatedReportesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/rentas': {
@@ -331,6 +350,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMultasRoute: typeof AuthenticatedMultasRoute
   AuthenticatedPagosRoute: typeof AuthenticatedPagosRoute
   AuthenticatedRentasRoute: typeof AuthenticatedRentasRoute
+  AuthenticatedReportesRoute: typeof AuthenticatedReportesRoute
   AuthenticatedSegurosRoute: typeof AuthenticatedSegurosRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
   AuthenticatedVehiculosRoute: typeof AuthenticatedVehiculosRoute
@@ -346,6 +366,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMultasRoute: AuthenticatedMultasRoute,
   AuthenticatedPagosRoute: AuthenticatedPagosRoute,
   AuthenticatedRentasRoute: AuthenticatedRentasRoute,
+  AuthenticatedReportesRoute: AuthenticatedReportesRoute,
   AuthenticatedSegurosRoute: AuthenticatedSegurosRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
   AuthenticatedVehiculosRoute: AuthenticatedVehiculosRoute,
