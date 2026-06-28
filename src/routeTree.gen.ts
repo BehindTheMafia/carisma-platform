@@ -13,19 +13,10 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedVehiculosRouteImport } from './routes/_authenticated/vehiculos'
-import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
-import { Route as AuthenticatedSegurosRouteImport } from './routes/_authenticated/seguros'
-import { Route as AuthenticatedReportesRouteImport } from './routes/_authenticated/reportes'
 import { Route as AuthenticatedRentasRouteImport } from './routes/_authenticated/rentas'
-import { Route as AuthenticatedPagosRouteImport } from './routes/_authenticated/pagos'
-import { Route as AuthenticatedMultasRouteImport } from './routes/_authenticated/multas'
-import { Route as AuthenticatedMantenimientosRouteImport } from './routes/_authenticated/mantenimientos'
-import { Route as AuthenticatedInspeccionesRouteImport } from './routes/_authenticated/inspecciones'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedContratosRouteImport } from './routes/_authenticated/contratos'
-import { Route as AuthenticatedConfiguracionRouteImport } from './routes/_authenticated/configuracion'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
-import { Route as AuthenticatedCalendarioRouteImport } from './routes/_authenticated/calendario'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -46,48 +37,11 @@ const AuthenticatedVehiculosRoute = AuthenticatedVehiculosRouteImport.update({
   path: '/vehiculos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
-  id: '/usuarios',
-  path: '/usuarios',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedSegurosRoute = AuthenticatedSegurosRouteImport.update({
-  id: '/seguros',
-  path: '/seguros',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedReportesRoute = AuthenticatedReportesRouteImport.update({
-  id: '/reportes',
-  path: '/reportes',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedRentasRoute = AuthenticatedRentasRouteImport.update({
   id: '/rentas',
   path: '/rentas',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedPagosRoute = AuthenticatedPagosRouteImport.update({
-  id: '/pagos',
-  path: '/pagos',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedMultasRoute = AuthenticatedMultasRouteImport.update({
-  id: '/multas',
-  path: '/multas',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedMantenimientosRoute =
-  AuthenticatedMantenimientosRouteImport.update({
-    id: '/mantenimientos',
-    path: '/mantenimientos',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedInspeccionesRoute =
-  AuthenticatedInspeccionesRouteImport.update({
-    id: '/inspecciones',
-    path: '/inspecciones',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -98,57 +52,28 @@ const AuthenticatedContratosRoute = AuthenticatedContratosRouteImport.update({
   path: '/contratos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedConfiguracionRoute =
-  AuthenticatedConfiguracionRouteImport.update({
-    id: '/configuracion',
-    path: '/configuracion',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedClientesRoute = AuthenticatedClientesRouteImport.update({
   id: '/clientes',
   path: '/clientes',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedCalendarioRoute = AuthenticatedCalendarioRouteImport.update({
-  id: '/calendario',
-  path: '/calendario',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/calendario': typeof AuthenticatedCalendarioRoute
   '/clientes': typeof AuthenticatedClientesRoute
-  '/configuracion': typeof AuthenticatedConfiguracionRoute
   '/contratos': typeof AuthenticatedContratosRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/inspecciones': typeof AuthenticatedInspeccionesRoute
-  '/mantenimientos': typeof AuthenticatedMantenimientosRoute
-  '/multas': typeof AuthenticatedMultasRoute
-  '/pagos': typeof AuthenticatedPagosRoute
   '/rentas': typeof AuthenticatedRentasRoute
-  '/reportes': typeof AuthenticatedReportesRoute
-  '/seguros': typeof AuthenticatedSegurosRoute
-  '/usuarios': typeof AuthenticatedUsuariosRoute
   '/vehiculos': typeof AuthenticatedVehiculosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/calendario': typeof AuthenticatedCalendarioRoute
   '/clientes': typeof AuthenticatedClientesRoute
-  '/configuracion': typeof AuthenticatedConfiguracionRoute
   '/contratos': typeof AuthenticatedContratosRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/inspecciones': typeof AuthenticatedInspeccionesRoute
-  '/mantenimientos': typeof AuthenticatedMantenimientosRoute
-  '/multas': typeof AuthenticatedMultasRoute
-  '/pagos': typeof AuthenticatedPagosRoute
   '/rentas': typeof AuthenticatedRentasRoute
-  '/reportes': typeof AuthenticatedReportesRoute
-  '/seguros': typeof AuthenticatedSegurosRoute
-  '/usuarios': typeof AuthenticatedUsuariosRoute
   '/vehiculos': typeof AuthenticatedVehiculosRoute
 }
 export interface FileRoutesById {
@@ -156,19 +81,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
-  '/_authenticated/calendario': typeof AuthenticatedCalendarioRoute
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
-  '/_authenticated/configuracion': typeof AuthenticatedConfiguracionRoute
   '/_authenticated/contratos': typeof AuthenticatedContratosRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
-  '/_authenticated/inspecciones': typeof AuthenticatedInspeccionesRoute
-  '/_authenticated/mantenimientos': typeof AuthenticatedMantenimientosRoute
-  '/_authenticated/multas': typeof AuthenticatedMultasRoute
-  '/_authenticated/pagos': typeof AuthenticatedPagosRoute
   '/_authenticated/rentas': typeof AuthenticatedRentasRoute
-  '/_authenticated/reportes': typeof AuthenticatedReportesRoute
-  '/_authenticated/seguros': typeof AuthenticatedSegurosRoute
-  '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
   '/_authenticated/vehiculos': typeof AuthenticatedVehiculosRoute
 }
 export interface FileRouteTypes {
@@ -176,56 +92,29 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
-    | '/calendario'
     | '/clientes'
-    | '/configuracion'
     | '/contratos'
     | '/dashboard'
-    | '/inspecciones'
-    | '/mantenimientos'
-    | '/multas'
-    | '/pagos'
     | '/rentas'
-    | '/reportes'
-    | '/seguros'
-    | '/usuarios'
     | '/vehiculos'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
-    | '/calendario'
     | '/clientes'
-    | '/configuracion'
     | '/contratos'
     | '/dashboard'
-    | '/inspecciones'
-    | '/mantenimientos'
-    | '/multas'
-    | '/pagos'
     | '/rentas'
-    | '/reportes'
-    | '/seguros'
-    | '/usuarios'
     | '/vehiculos'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
-    | '/_authenticated/calendario'
     | '/_authenticated/clientes'
-    | '/_authenticated/configuracion'
     | '/_authenticated/contratos'
     | '/_authenticated/dashboard'
-    | '/_authenticated/inspecciones'
-    | '/_authenticated/mantenimientos'
-    | '/_authenticated/multas'
-    | '/_authenticated/pagos'
     | '/_authenticated/rentas'
-    | '/_authenticated/reportes'
-    | '/_authenticated/seguros'
-    | '/_authenticated/usuarios'
     | '/_authenticated/vehiculos'
   fileRoutesById: FileRoutesById
 }
@@ -265,60 +154,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedVehiculosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/usuarios': {
-      id: '/_authenticated/usuarios'
-      path: '/usuarios'
-      fullPath: '/usuarios'
-      preLoaderRoute: typeof AuthenticatedUsuariosRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/seguros': {
-      id: '/_authenticated/seguros'
-      path: '/seguros'
-      fullPath: '/seguros'
-      preLoaderRoute: typeof AuthenticatedSegurosRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/reportes': {
-      id: '/_authenticated/reportes'
-      path: '/reportes'
-      fullPath: '/reportes'
-      preLoaderRoute: typeof AuthenticatedReportesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/rentas': {
       id: '/_authenticated/rentas'
       path: '/rentas'
       fullPath: '/rentas'
       preLoaderRoute: typeof AuthenticatedRentasRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/pagos': {
-      id: '/_authenticated/pagos'
-      path: '/pagos'
-      fullPath: '/pagos'
-      preLoaderRoute: typeof AuthenticatedPagosRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/multas': {
-      id: '/_authenticated/multas'
-      path: '/multas'
-      fullPath: '/multas'
-      preLoaderRoute: typeof AuthenticatedMultasRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/mantenimientos': {
-      id: '/_authenticated/mantenimientos'
-      path: '/mantenimientos'
-      fullPath: '/mantenimientos'
-      preLoaderRoute: typeof AuthenticatedMantenimientosRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/inspecciones': {
-      id: '/_authenticated/inspecciones'
-      path: '/inspecciones'
-      fullPath: '/inspecciones'
-      preLoaderRoute: typeof AuthenticatedInspeccionesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard': {
@@ -335,13 +175,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedContratosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/configuracion': {
-      id: '/_authenticated/configuracion'
-      path: '/configuracion'
-      fullPath: '/configuracion'
-      preLoaderRoute: typeof AuthenticatedConfiguracionRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/clientes': {
       id: '/_authenticated/clientes'
       path: '/clientes'
@@ -349,47 +182,22 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/calendario': {
-      id: '/_authenticated/calendario'
-      path: '/calendario'
-      fullPath: '/calendario'
-      preLoaderRoute: typeof AuthenticatedCalendarioRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedCalendarioRoute: typeof AuthenticatedCalendarioRoute
   AuthenticatedClientesRoute: typeof AuthenticatedClientesRoute
-  AuthenticatedConfiguracionRoute: typeof AuthenticatedConfiguracionRoute
   AuthenticatedContratosRoute: typeof AuthenticatedContratosRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
-  AuthenticatedInspeccionesRoute: typeof AuthenticatedInspeccionesRoute
-  AuthenticatedMantenimientosRoute: typeof AuthenticatedMantenimientosRoute
-  AuthenticatedMultasRoute: typeof AuthenticatedMultasRoute
-  AuthenticatedPagosRoute: typeof AuthenticatedPagosRoute
   AuthenticatedRentasRoute: typeof AuthenticatedRentasRoute
-  AuthenticatedReportesRoute: typeof AuthenticatedReportesRoute
-  AuthenticatedSegurosRoute: typeof AuthenticatedSegurosRoute
-  AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
   AuthenticatedVehiculosRoute: typeof AuthenticatedVehiculosRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedCalendarioRoute: AuthenticatedCalendarioRoute,
   AuthenticatedClientesRoute: AuthenticatedClientesRoute,
-  AuthenticatedConfiguracionRoute: AuthenticatedConfiguracionRoute,
   AuthenticatedContratosRoute: AuthenticatedContratosRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
-  AuthenticatedInspeccionesRoute: AuthenticatedInspeccionesRoute,
-  AuthenticatedMantenimientosRoute: AuthenticatedMantenimientosRoute,
-  AuthenticatedMultasRoute: AuthenticatedMultasRoute,
-  AuthenticatedPagosRoute: AuthenticatedPagosRoute,
   AuthenticatedRentasRoute: AuthenticatedRentasRoute,
-  AuthenticatedReportesRoute: AuthenticatedReportesRoute,
-  AuthenticatedSegurosRoute: AuthenticatedSegurosRoute,
-  AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
   AuthenticatedVehiculosRoute: AuthenticatedVehiculosRoute,
 }
 
