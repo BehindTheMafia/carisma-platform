@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedVehiculosRouteImport } from './routes/_authenticated/vehiculos'
+import { Route as AuthenticatedSegurosRouteImport } from './routes/_authenticated/seguros'
 import { Route as AuthenticatedRentasRouteImport } from './routes/_authenticated/rentas'
 import { Route as AuthenticatedPagosRouteImport } from './routes/_authenticated/pagos'
 import { Route as AuthenticatedMantenimientosRouteImport } from './routes/_authenticated/mantenimientos'
@@ -37,6 +38,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthenticatedVehiculosRoute = AuthenticatedVehiculosRouteImport.update({
   id: '/vehiculos',
   path: '/vehiculos',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSegurosRoute = AuthenticatedSegurosRouteImport.update({
+  id: '/seguros',
+  path: '/seguros',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedRentasRoute = AuthenticatedRentasRouteImport.update({
@@ -80,6 +86,7 @@ export interface FileRoutesByFullPath {
   '/mantenimientos': typeof AuthenticatedMantenimientosRoute
   '/pagos': typeof AuthenticatedPagosRoute
   '/rentas': typeof AuthenticatedRentasRoute
+  '/seguros': typeof AuthenticatedSegurosRoute
   '/vehiculos': typeof AuthenticatedVehiculosRoute
 }
 export interface FileRoutesByTo {
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/mantenimientos': typeof AuthenticatedMantenimientosRoute
   '/pagos': typeof AuthenticatedPagosRoute
   '/rentas': typeof AuthenticatedRentasRoute
+  '/seguros': typeof AuthenticatedSegurosRoute
   '/vehiculos': typeof AuthenticatedVehiculosRoute
 }
 export interface FileRoutesById {
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/_authenticated/mantenimientos': typeof AuthenticatedMantenimientosRoute
   '/_authenticated/pagos': typeof AuthenticatedPagosRoute
   '/_authenticated/rentas': typeof AuthenticatedRentasRoute
+  '/_authenticated/seguros': typeof AuthenticatedSegurosRoute
   '/_authenticated/vehiculos': typeof AuthenticatedVehiculosRoute
 }
 export interface FileRouteTypes {
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/mantenimientos'
     | '/pagos'
     | '/rentas'
+    | '/seguros'
     | '/vehiculos'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/mantenimientos'
     | '/pagos'
     | '/rentas'
+    | '/seguros'
     | '/vehiculos'
   id:
     | '__root__'
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/_authenticated/mantenimientos'
     | '/_authenticated/pagos'
     | '/_authenticated/rentas'
+    | '/_authenticated/seguros'
     | '/_authenticated/vehiculos'
   fileRoutesById: FileRoutesById
 }
@@ -177,6 +189,13 @@ declare module '@tanstack/react-router' {
       path: '/vehiculos'
       fullPath: '/vehiculos'
       preLoaderRoute: typeof AuthenticatedVehiculosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/seguros': {
+      id: '/_authenticated/seguros'
+      path: '/seguros'
+      fullPath: '/seguros'
+      preLoaderRoute: typeof AuthenticatedSegurosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/rentas': {
@@ -231,6 +250,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMantenimientosRoute: typeof AuthenticatedMantenimientosRoute
   AuthenticatedPagosRoute: typeof AuthenticatedPagosRoute
   AuthenticatedRentasRoute: typeof AuthenticatedRentasRoute
+  AuthenticatedSegurosRoute: typeof AuthenticatedSegurosRoute
   AuthenticatedVehiculosRoute: typeof AuthenticatedVehiculosRoute
 }
 
@@ -241,6 +261,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMantenimientosRoute: AuthenticatedMantenimientosRoute,
   AuthenticatedPagosRoute: AuthenticatedPagosRoute,
   AuthenticatedRentasRoute: AuthenticatedRentasRoute,
+  AuthenticatedSegurosRoute: AuthenticatedSegurosRoute,
   AuthenticatedVehiculosRoute: AuthenticatedVehiculosRoute,
 }
 
