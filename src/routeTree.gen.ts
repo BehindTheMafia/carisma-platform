@@ -22,6 +22,7 @@ import { Route as AuthenticatedMantenimientosRouteImport } from './routes/_authe
 import { Route as AuthenticatedInspeccionesRouteImport } from './routes/_authenticated/inspecciones'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedContratosRouteImport } from './routes/_authenticated/contratos'
+import { Route as AuthenticatedConfiguracionRouteImport } from './routes/_authenticated/configuracion'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
 
 const AuthRoute = AuthRouteImport.update({
@@ -90,6 +91,12 @@ const AuthenticatedContratosRoute = AuthenticatedContratosRouteImport.update({
   path: '/contratos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedConfiguracionRoute =
+  AuthenticatedConfiguracionRouteImport.update({
+    id: '/configuracion',
+    path: '/configuracion',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedClientesRoute = AuthenticatedClientesRouteImport.update({
   id: '/clientes',
   path: '/clientes',
@@ -100,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/clientes': typeof AuthenticatedClientesRoute
+  '/configuracion': typeof AuthenticatedConfiguracionRoute
   '/contratos': typeof AuthenticatedContratosRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/inspecciones': typeof AuthenticatedInspeccionesRoute
@@ -115,6 +123,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/clientes': typeof AuthenticatedClientesRoute
+  '/configuracion': typeof AuthenticatedConfiguracionRoute
   '/contratos': typeof AuthenticatedContratosRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/inspecciones': typeof AuthenticatedInspeccionesRoute
@@ -132,6 +141,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
+  '/_authenticated/configuracion': typeof AuthenticatedConfiguracionRoute
   '/_authenticated/contratos': typeof AuthenticatedContratosRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/inspecciones': typeof AuthenticatedInspeccionesRoute
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/clientes'
+    | '/configuracion'
     | '/contratos'
     | '/dashboard'
     | '/inspecciones'
@@ -164,6 +175,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/clientes'
+    | '/configuracion'
     | '/contratos'
     | '/dashboard'
     | '/inspecciones'
@@ -180,6 +192,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/clientes'
+    | '/_authenticated/configuracion'
     | '/_authenticated/contratos'
     | '/_authenticated/dashboard'
     | '/_authenticated/inspecciones'
@@ -291,6 +304,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedContratosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/configuracion': {
+      id: '/_authenticated/configuracion'
+      path: '/configuracion'
+      fullPath: '/configuracion'
+      preLoaderRoute: typeof AuthenticatedConfiguracionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/clientes': {
       id: '/_authenticated/clientes'
       path: '/clientes'
@@ -303,6 +323,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedClientesRoute: typeof AuthenticatedClientesRoute
+  AuthenticatedConfiguracionRoute: typeof AuthenticatedConfiguracionRoute
   AuthenticatedContratosRoute: typeof AuthenticatedContratosRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedInspeccionesRoute: typeof AuthenticatedInspeccionesRoute
@@ -317,6 +338,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedClientesRoute: AuthenticatedClientesRoute,
+  AuthenticatedConfiguracionRoute: AuthenticatedConfiguracionRoute,
   AuthenticatedContratosRoute: AuthenticatedContratosRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedInspeccionesRoute: AuthenticatedInspeccionesRoute,
