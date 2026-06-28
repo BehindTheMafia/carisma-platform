@@ -18,6 +18,7 @@ import { Route as AuthenticatedRentasRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedPagosRouteImport } from './routes/_authenticated/pagos'
 import { Route as AuthenticatedMultasRouteImport } from './routes/_authenticated/multas'
 import { Route as AuthenticatedMantenimientosRouteImport } from './routes/_authenticated/mantenimientos'
+import { Route as AuthenticatedInspeccionesRouteImport } from './routes/_authenticated/inspecciones'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedContratosRouteImport } from './routes/_authenticated/contratos'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
@@ -67,6 +68,12 @@ const AuthenticatedMantenimientosRoute =
     path: '/mantenimientos',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedInspeccionesRoute =
+  AuthenticatedInspeccionesRouteImport.update({
+    id: '/inspecciones',
+    path: '/inspecciones',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -89,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/clientes': typeof AuthenticatedClientesRoute
   '/contratos': typeof AuthenticatedContratosRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/inspecciones': typeof AuthenticatedInspeccionesRoute
   '/mantenimientos': typeof AuthenticatedMantenimientosRoute
   '/multas': typeof AuthenticatedMultasRoute
   '/pagos': typeof AuthenticatedPagosRoute
@@ -102,6 +110,7 @@ export interface FileRoutesByTo {
   '/clientes': typeof AuthenticatedClientesRoute
   '/contratos': typeof AuthenticatedContratosRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/inspecciones': typeof AuthenticatedInspeccionesRoute
   '/mantenimientos': typeof AuthenticatedMantenimientosRoute
   '/multas': typeof AuthenticatedMultasRoute
   '/pagos': typeof AuthenticatedPagosRoute
@@ -117,6 +126,7 @@ export interface FileRoutesById {
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
   '/_authenticated/contratos': typeof AuthenticatedContratosRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/inspecciones': typeof AuthenticatedInspeccionesRoute
   '/_authenticated/mantenimientos': typeof AuthenticatedMantenimientosRoute
   '/_authenticated/multas': typeof AuthenticatedMultasRoute
   '/_authenticated/pagos': typeof AuthenticatedPagosRoute
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
     | '/clientes'
     | '/contratos'
     | '/dashboard'
+    | '/inspecciones'
     | '/mantenimientos'
     | '/multas'
     | '/pagos'
@@ -145,6 +156,7 @@ export interface FileRouteTypes {
     | '/clientes'
     | '/contratos'
     | '/dashboard'
+    | '/inspecciones'
     | '/mantenimientos'
     | '/multas'
     | '/pagos'
@@ -159,6 +171,7 @@ export interface FileRouteTypes {
     | '/_authenticated/clientes'
     | '/_authenticated/contratos'
     | '/_authenticated/dashboard'
+    | '/_authenticated/inspecciones'
     | '/_authenticated/mantenimientos'
     | '/_authenticated/multas'
     | '/_authenticated/pagos'
@@ -238,6 +251,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMantenimientosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/inspecciones': {
+      id: '/_authenticated/inspecciones'
+      path: '/inspecciones'
+      fullPath: '/inspecciones'
+      preLoaderRoute: typeof AuthenticatedInspeccionesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
@@ -266,6 +286,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedClientesRoute: typeof AuthenticatedClientesRoute
   AuthenticatedContratosRoute: typeof AuthenticatedContratosRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedInspeccionesRoute: typeof AuthenticatedInspeccionesRoute
   AuthenticatedMantenimientosRoute: typeof AuthenticatedMantenimientosRoute
   AuthenticatedMultasRoute: typeof AuthenticatedMultasRoute
   AuthenticatedPagosRoute: typeof AuthenticatedPagosRoute
@@ -278,6 +299,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedClientesRoute: AuthenticatedClientesRoute,
   AuthenticatedContratosRoute: AuthenticatedContratosRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedInspeccionesRoute: AuthenticatedInspeccionesRoute,
   AuthenticatedMantenimientosRoute: AuthenticatedMantenimientosRoute,
   AuthenticatedMultasRoute: AuthenticatedMultasRoute,
   AuthenticatedPagosRoute: AuthenticatedPagosRoute,
