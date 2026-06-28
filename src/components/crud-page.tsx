@@ -3,7 +3,16 @@ import { useForm, type FieldValues } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Search, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase as supabaseTyped } from "@/integrations/supabase/client";
+// Dynamic table access — bypass generated table-name typing
+const sb = supabaseTyped as unknown as {
+  from: (table: string) => {
+    select: (cols: string, opts?: { count?: "exact" }) => any;
+    insert: (values: unknown) => Promise<{ error: unknown }>;
+    update: (values: unknown) => { eq: (col: string, val: string) => Promise<{ error: unknown }> };
+    delete: () => { eq: (col: string, val: string) => Promise<{ error: unknown }> };
+  };
+};
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,7 +40,6 @@ export interface OptionsQuery {
   labelKey: string | ((row: Record<string, unknown>) => string);
   select?: string;
   orderBy?: string;
-  filter?: (q: ReturnType<ReturnType<typeof supabase.from>["select"]>) => unknown;
 }
 
 export interface FieldDef {
@@ -83,13 +91,12 @@ function useOptions(field: FieldDef) {
     enabled: !!field.optionsQuery,
     queryFn: async () => {
       const q = field.optionsQuery!;
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from(q.table)
-        // @ts-expect-error dynamic select
         .select(q.select ?? `${q.valueKey}, ${typeof q.labelKey === "string" ? q.labelKey : "*"}`)
         .order(q.orderBy ?? (typeof q.labelKey === "string" ? q.labelKey : q.valueKey));
-      if (error) throw error;
-      return (data ?? []).map((r: Record<string, unknown>) => ({
+      if (error) throw error as Error;
+      return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
         value: String(r[q.valueKey]),
         label: typeof q.labelKey === "function" ? q.labelKey(r) : String(r[q.labelKey] ?? r[q.valueKey]),
       }));
@@ -242,9 +249,8 @@ export function CrudPage<Row extends Record<string, unknown>>({ config }: { conf
   const listQ = useQuery({
     queryKey,
     queryFn: async () => {
-      let q = supabase
+      let q = sb
         .from(config.table)
-        // @ts-expect-error dynamic select
         .select(config.select ?? "*", { count: "exact" });
       if (softDelete) q = q.is("deleted_at", null);
       if (search && config.searchFields?.length) {
@@ -256,8 +262,8 @@ export function CrudPage<Row extends Record<string, unknown>>({ config }: { conf
       else q = q.order("created_at", { ascending: false });
       q = q.range(page * pageSize, page * pageSize + pageSize - 1);
       const { data, error, count } = await q;
-      if (error) throw error;
-      return { rows: (data ?? []) as Row[], count: count ?? 0 };
+      if (error) throw error as Error;
+      return { rows: ((data ?? []) as unknown) as Row[], count: count ?? 0 };
     },
   });
 
@@ -265,11 +271,11 @@ export function CrudPage<Row extends Record<string, unknown>>({ config }: { conf
     mutationFn: async (values: Record<string, unknown>) => {
       if (editing && (editing as Record<string, unknown>)[pk]) {
         const id = (editing as Record<string, unknown>)[pk];
-        const { error } = await supabase.from(config.table).update(values).eq(pk, id as string);
-        if (error) throw error;
+        const { error } = await sb.from(config.table).update(values).eq(pk, id as string);
+        if (error) throw error as Error;
       } else {
-        const { error } = await supabase.from(config.table).insert(values as never);
-        if (error) throw error;
+        const { error } = await sb.from(config.table).insert(values);
+        if (error) throw error as Error;
       }
     },
     onSuccess: () => {
@@ -284,11 +290,11 @@ export function CrudPage<Row extends Record<string, unknown>>({ config }: { conf
     mutationFn: async (row: Row) => {
       const id = (row as Record<string, unknown>)[pk] as string;
       if (softDelete) {
-        const { error } = await supabase.from(config.table).update({ deleted_at: new Date().toISOString() } as never).eq(pk, id);
-        if (error) throw error;
+        const { error } = await sb.from(config.table).update({ deleted_at: new Date().toISOString() }).eq(pk, id);
+        if (error) throw error as Error;
       } else {
-        const { error } = await supabase.from(config.table).delete().eq(pk, id);
-        if (error) throw error;
+        const { error } = await sb.from(config.table).delete().eq(pk, id);
+        if (error) throw error as Error;
       }
     },
     onSuccess: () => {
