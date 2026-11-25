@@ -2,9 +2,10 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { svg2pdf } from 'svg2pdf.js';
-import suvImgUrl from '@/assets/SUV.png';
-import pickupImgUrl from '@/assets/PICKUP.png';
-import sedanImgUrl from '@/assets/SEDAN.png';
+import { type CalibrationOffsets, DEFAULT_OFFSETS } from './calibrationStorage';
+import { getVehicleImageUrl } from '@/components/vehicle-damage-report/vehicle-image';
+import firmaSelloUrl from '@/assets/firma y sello.png';
+import { esFacturaPorConceptos, calcularTotalConceptos, calcularImporteConcepto, facturaConceptosSchema } from '@/lib/factura-conceptos';
 
 const logoUrl = '/logorent.png';
 
@@ -15,13 +16,22 @@ const ICON_MONEY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512
 const ICON_PLUS = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M256 80c0-17.7-14.3-32-32-32s-32 14.3-32 32V224H48c-17.7 0-32 14.3-32 32s14.3 32 32 32H192V432c0 17.7 14.3 32 32 32s32-14.3 32-32V288H400c17.7 0 32-14.3 32-32s-14.3-32-32-32H256V80z"/></svg>`;
 const ICON_INFO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336h24V272H216c-13.3 0-24-10.7-24-24s10.7-24 24-24h40c13.3 0 24 10.7 24 24v88h8c13.3 0 24 10.7 24 24s-10.7 24-24 24H216c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-144a32 32 0 1 1 0-64 32 32 0 1 1 0 64z"/></svg>`;
 const ICON_FILE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><path d="M0 64C0 28.7 28.7 0 64 0H224L384 160V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V64zm224 32V160H320L224 96zM64 288c0 8.8 7.2 16 16 16H304c8.8 0 16-7.2 16-16s-7.2-16-16-16H80c-8.8 0-16 7.2-16 16zm0 96c0 8.8 7.2 16 16 16H304c8.8 0 16-7.2 16-16s-7.2-16-16-16H80c-8.8 0-16 7.2-16 16z"/></svg>`;
+const ICON_EMAIL = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4L236.8 313.6c11.4 8.5 27 8.5 38.4 0L492.8 150.4c12.1-9.1 19.2-23.3 19.2-38.4c0-26.5-21.5-48-48-48H48zM0 176V384c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V176L294.4 339.2c-22.8 17.1-54 17.1-76.8 0L0 176z"/></svg>`;
+const ICON_PHONE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M164.9 24.6c-7.7-18.6-28-28.5-47.4-23.2l-88 24C12.1 30.2 0 46 0 64C0 311.4 200.6 512 448 512c18 0 33.8-12.1 38.6-29.5l24-88c5.3-19.4-4.6-39.7-23.2-47.4l-96-40c-16.3-6.8-35.2-2.1-46.3 11.6L304.7 368C234.3 334.7 177.3 277.7 144 207.3L193.3 167c13.7-11.2 18.4-30 11.6-46.3l-40-96z"/></svg>`;
+const ICON_LOCATION = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><path d="M215.7 499.2C267 435 384 279.4 384 192C384 86 298 0 192 0S0 86 0 192c0 87.4 117 243 168.3 307.2c12.3 15.3 35.1 15.3 47.4 0zM192 128a64 64 0 1 1 0 128 64 64 0 1 1 0-128z"/></svg>`;
 
 const COMPANY = {
     NAME: 'Maria Auxiliadora Torres Montalvan',
     EMAIL: 'rentcartm26@gmail.com',
-    PHONE: '8386-6806',
-    ADDRESS: 'BO. LA REFORMA, POLICIA NACIONAL 2 1/2C E.'
+    PHONE: '8386-6806 (TIGO) | 76811323 (TIGO) | 2523-6262',
+    ADDRESS: 'BO. LA REFORMA, POLICIA NACIONAL 2 1/2C E. MASAYA',
+    RUC: '4011107950010N'
 };
+let CURRENT_COMPANY = COMPANY;
+
+function resolveCompany(data) {
+    CURRENT_COMPANY = data?.datosEmpresa || COMPANY;
+}
 
 const COLORS = {
     PRIMARY_BLUE: [26, 74, 140],
@@ -36,33 +46,54 @@ const LEGAL_TEXT = 'Por medio de la presente se deja constancia que la transacci
 
 const fmt = (val) => {
     const num = parseFloat(val);
-    return !isNaN(num) ? `$${num.toFixed(2)}` : '$—';
+    if (!num) return '';
+    return `$${num.toFixed(2)}`;
 };
 const fmtc = (val) => {
     const num = parseFloat(val);
-    return !isNaN(num) ? `C$${num.toFixed(2)}` : 'C$—';
+    if (!num) return '';
+    return `C$${num.toFixed(2)}`;
 };
 
+export function getCustomLabel(key: string, defaultLabel: string, data: any): string {
+    if (data && data.customLabels && data.customLabels[key]) {
+        return data.customLabels[key];
+    }
+    const directKey = `${key}Label`;
+    if (data && data[directKey]) {
+        return data[directKey];
+    }
+    return defaultLabel;
+}
+
+export const isFilled = (val) => val !== undefined && val !== '' && val !== null;
+
 const fmtDateStr = (dateStr) => {
-    if (!dateStr) return '___ / ___ / ______';
-    const [y, m, d] = dateStr.split('-');
+    if (!dateStr) return '';
+    const clean = String(dateStr).slice(0, 10);
+    const parts = clean.split('-');
+    if (parts.length < 3) return clean;
+    const [y, m, d] = parts;
     return `${d} / ${m} / ${y}`;
 };
 
 const getMonthName = (dateStr) => {
     if (!dateStr) return '_______________';
+    const clean = String(dateStr).slice(0, 10);
     const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    const m = parseInt(dateStr.split('-')[1], 10);
-    return months[m - 1];
+    const parts = clean.split('-');
+    if (parts.length < 2) return '_______________';
+    const m = parseInt(parts[1], 10);
+    return months[m - 1] || '_______________';
 };
 
 function setupPDF() {
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    return { doc, W: 210, H: 297, ML: 15, MR: 15 };
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'letter' });
+    return { doc, W: 215.9, H: 279.4, ML: 15, MR: 15 };
 }
 
 let cachedLogoData = null;
-async function getLogoData() {
+export async function getLogoData() {
     if (cachedLogoData) return cachedLogoData;
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -98,7 +129,7 @@ async function getLogoData() {
 let cachedVehicleImages = {};
 async function getVehicleImage(type) {
     if (cachedVehicleImages[type]) return cachedVehicleImages[type];
-    const url = type === 'Pickup' ? pickupImgUrl : type === 'Sedán' ? sedanImgUrl : suvImgUrl;
+    const url = getVehicleImageUrl(type);
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
@@ -114,79 +145,147 @@ async function getVehicleImage(type) {
     });
 }
 
+let cachedFirmaSello = null;
+async function getFirmaSello() {
+    if (cachedFirmaSello) return cachedFirmaSello;
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width; canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            cachedFirmaSello = { data: canvas.toDataURL('image/png'), w: img.width, h: img.height };
+            resolve(cachedFirmaSello);
+        };
+        img.onerror = () => resolve(null);
+        img.src = firmaSelloUrl;
+    });
+}
+
 async function drawHeader(doc, W, ML, y, docTitle, invoiceNum = null) {
-    let currentY = 12;
+    let currentY = 8;
+    const midX = W / 2;
+    const rightX = W - ML;
+
+    doc.setTextColor(...COLORS.PRIMARY_BLUE);
+    doc.setFont('times', 'bold');
+    doc.setFontSize(16);
+    if (!invoiceNum) {
+        doc.text(docTitle, midX, currentY + 5, { align: 'center' });
+    }
+
+    currentY += 12;
+
+    if (docTitle === 'CONFIRMACIÓN DE RESERVA') {
+        doc.setFont('times', 'italic');
+        doc.setFontSize(9);
+        doc.setTextColor(...COLORS.GRAY_TEXT);
+        doc.text('Este no es un recibo', midX, currentY);
+        currentY += 5;
+    }
 
     try {
         const logo = await getLogoData();
         if (logo) {
-            const logoHeight = 24;
+            const logoHeight = 48;
             const logoWidth = (logo.w / logo.h) * logoHeight;
-            const logoX = (W - logoWidth) / 2;
-            doc.addImage(logo.data, 'PNG', logoX, currentY, logoWidth, logoHeight);
-            currentY += logoHeight + 8;
+            doc.addImage(logo.data, 'PNG', ML, currentY, logoWidth, logoHeight);
+
+            const infoY = currentY + 3;
+            doc.setFont('times', 'bold');
+            doc.setFontSize(9.5);
+            doc.setTextColor(...COLORS.PRIMARY_BLUE);
+            doc.text(CURRENT_COMPANY.NAME, rightX, infoY + 5, { align: 'right' });
+            doc.setFont('times', 'normal');
+            doc.setFontSize(8.5);
+            doc.setTextColor(...COLORS.GRAY_TEXT);
+            const emailIconX = rightX - doc.getTextWidth(CURRENT_COMPANY.EMAIL) - 4;
+            await drawIcon(doc, ICON_EMAIL, emailIconX, infoY + 9.5, 1.8);
+            doc.text(CURRENT_COMPANY.EMAIL, rightX, infoY + 9.5, { align: 'right' });
+            doc.text(`Tel: ${CURRENT_COMPANY.PHONE}`, rightX, infoY + 14, { align: 'right' });
+            const phoneIconX = rightX - doc.getTextWidth(`Tel: ${CURRENT_COMPANY.PHONE}`) - 4;
+            await drawIcon(doc, ICON_PHONE, phoneIconX, infoY + 13.5, 1.8);
+            const addressIconX = rightX - doc.getTextWidth(CURRENT_COMPANY.ADDRESS) - 4;
+            await drawIcon(doc, ICON_LOCATION, addressIconX, infoY + 18, 1.8);
+            doc.text(CURRENT_COMPANY.ADDRESS, rightX, infoY + 18.5, { align: 'right' });
+            doc.text(`RUC: ${CURRENT_COMPANY.RUC}`, rightX, infoY + 22.5, { align: 'right' });
+
+            currentY += Math.max(logoHeight, 24) + 8;
         }
     } catch (e) {}
 
     if (currentY === 12) currentY = 20;
 
-    doc.setTextColor(...COLORS.PRIMARY_BLUE);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(16);
-
-    let titleText = docTitle;
-
-    const titleWidth = doc.getTextWidth(titleText);
-    const midX = W / 2;
-
-    doc.text(titleText, midX, currentY, { align: 'center' });
-
-    if (invoiceNum) {
-        doc.setFont('times', 'bold');
-        doc.setFontSize(12);
-        doc.text(`N.º ${invoiceNum}`, W - ML, currentY, { align: 'right' });
-    }
-
-    doc.setDrawColor(...COLORS.PRIMARY_BLUE);
-    doc.setLineWidth(0.5);
-
-    const lineY = currentY - 2;
-    doc.circle(midX - titleWidth/2 - 8, lineY, 0.8, 'F');
-    doc.line(ML + 10, lineY, midX - titleWidth/2 - 10, lineY);
-
-    doc.circle(midX + titleWidth/2 + 8, lineY, 0.8, 'F');
-    doc.line(midX + titleWidth/2 + 10, lineY, W - ML - 10, lineY);
-
-    if (docTitle === 'CONFIRMACIÓN DE RESERVA') {
-        currentY += 5;
-        doc.setFont('times', 'italic');
-        doc.setFontSize(9);
-        doc.setTextColor(...COLORS.GRAY_TEXT);
-        doc.text('Este no es un recibo', midX, currentY, { align: 'center' });
-    }
-
-    currentY += 8;
-
-    doc.setFont('times', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(...COLORS.PRIMARY_BLUE);
-    doc.text(COMPANY.NAME, midX, currentY, { align: 'center' }); currentY += 4;
-    doc.setFont('times', 'normal');
-    doc.setFontSize(8.5);
-    doc.setTextColor(...COLORS.GRAY_TEXT);
-    doc.text(`${COMPANY.EMAIL}  |  Tel: ${COMPANY.PHONE}`, midX, currentY, { align: 'center' }); currentY += 4;
-    doc.text(COMPANY.ADDRESS, midX, currentY, { align: 'center' }); currentY += 8;
-
     doc.setFontSize(10);
     doc.setFont('times', 'bold');
     doc.setTextColor(...COLORS.PRIMARY_BLUE);
     doc.text('Fecha:', ML, currentY);
+    if (invoiceNum) {
+        doc.setFont('times', 'bold');
+        doc.setFontSize(14);
+        doc.text(`FACTURA N.º ${invoiceNum}`, W - ML, currentY, { align: 'right' });
+    }
 
     doc.setDrawColor(...COLORS.PRIMARY_BLUE);
     doc.setLineWidth(0.3);
     doc.line(ML, currentY + 3, W - ML, currentY + 3);
 
     return currentY + 10;
+}
+
+async function drawHeaderCompact(doc, W, ML, docTitle, invoiceNum = null) {
+    let currentY = 8;
+    const midX = W / 2;
+    const rightX = W - ML;
+
+    doc.setTextColor(...COLORS.PRIMARY_BLUE);
+    doc.setFont('times', 'bold');
+    doc.setFontSize(14);
+    doc.text(docTitle, midX, currentY + 6, { align: 'center' });
+    if (invoiceNum) {
+        doc.setFontSize(10);
+        doc.text(`N.º ${invoiceNum}`, W - ML, currentY + 6, { align: 'right' });
+    }
+    currentY += 13;
+
+    if (docTitle === 'CONFIRMACIÓN DE RESERVA') {
+        doc.setFont('times', 'italic');
+        doc.setFontSize(9);
+        doc.setTextColor(...COLORS.GRAY_TEXT);
+        doc.text('Este no es un recibo', midX, currentY, { align: 'center' });
+        currentY += 5;
+    }
+
+    try {
+        const logo = await getLogoData();
+        if (logo) {
+            const logoHeight = 28;
+            const logoWidth = (logo.w / logo.h) * logoHeight;
+            doc.addImage(logo.data, 'PNG', ML, currentY, logoWidth, logoHeight);
+
+            const infoY = currentY + 1;
+            doc.setFont('times', 'bold');
+            doc.setFontSize(8.5);
+            doc.setTextColor(...COLORS.PRIMARY_BLUE);
+            doc.text(CURRENT_COMPANY.NAME, rightX, infoY + 4, { align: 'right' });
+            doc.setFont('times', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(...COLORS.GRAY_TEXT);
+            doc.text(CURRENT_COMPANY.EMAIL, rightX, infoY + 8.5, { align: 'right' });
+            doc.text(`Tel: ${CURRENT_COMPANY.PHONE}`, rightX, infoY + 13, { align: 'right' });
+            doc.text(CURRENT_COMPANY.ADDRESS, rightX, infoY + 17.5, { align: 'right' });
+            doc.text(`RUC: ${CURRENT_COMPANY.RUC}`, rightX, infoY + 22, { align: 'right' });
+
+            currentY += Math.max(logoHeight, 24) + 4;
+        }
+    } catch (e) {}
+
+    doc.setDrawColor(...COLORS.PRIMARY_BLUE);
+    doc.setLineWidth(0.3);
+    doc.line(ML, currentY, W - ML, currentY);
+
+    return currentY + 5;
 }
 
 async function drawIcon(doc, iconContent, cx, cy, radius) {
@@ -240,7 +339,7 @@ function twoColRow(doc, ML, y, label, value, W) {
 
     doc.setFont('times', 'normal');
     doc.setTextColor(...COLORS.BLACK);
-    doc.text(value || '—', ML + LW, y);
+    doc.text(value || '', ML + LW, y);
 
     doc.setDrawColor(240, 240, 240);
     doc.setLineWidth(0.2);
@@ -248,43 +347,118 @@ function twoColRow(doc, ML, y, label, value, W) {
     return y + 7;
 }
 
-function drawSignatures(doc, W, ML, y, leftName, rightName, leftTitle, rightTitle) {
+function twoColRowCompact(doc, ML, y, label, value, W) {
+    const LW = 40;
+    doc.setFont('times', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...COLORS.GRAY_TEXT);
+    doc.text(label, ML + 2, y);
+
+    doc.setFont('times', 'normal');
+    doc.setTextColor(...COLORS.BLACK);
+    doc.text(value || '', ML + LW, y);
+
+    doc.setDrawColor(240, 240, 240);
+    doc.setLineWidth(0.15);
+    doc.line(ML + 2, y + 1.5, W - ML - 2, y + 1.5);
+    return y + 5.2;
+}
+
+async function drawSignatures(doc, W, ML, y, leftName, rightName, leftTitle, rightTitle, showFirma = true) {
     const midX = W / 2;
     doc.setDrawColor(...COLORS.PRIMARY_BLUE);
-    doc.setLineWidth(0.4);
+    doc.setLineWidth(0.3);
     doc.line(ML + 5, y, midX - 10, y);
     doc.line(midX + 10, y, W - ML - 5, y);
+
+    const leftCenterX = (ML + midX - 10) / 2 + ML / 2;
+
+    if (showFirma) {
+        try {
+            const firma = await getFirmaSello();
+            if (firma) {
+                const fh = 48;
+                const fw = (firma.w / firma.h) * fh;
+                const overlap = fh * 0.28;
+                doc.addImage(firma.data, 'PNG', leftCenterX - fw / 2, y - fh + overlap, fw, fh);
+            }
+        } catch (e) {}
+    }
 
     doc.setFont('times', 'bold');
     doc.setFontSize(9);
     doc.setTextColor(...COLORS.PRIMARY_BLUE);
-    doc.text(leftName, (ML + midX - 10) / 2 + ML / 2, y + 5, { align: 'center' });
+    doc.text(leftName, leftCenterX, y + 7, { align: 'center' });
     doc.text(rightName || '_________________________', (midX + 10 + W - ML - 5) / 2, y + 5, { align: 'center' });
 
     if (leftTitle) {
         doc.setFont('times', 'normal');
         doc.setFontSize(8.5);
         doc.setTextColor(...COLORS.GRAY_TEXT);
-        doc.text(leftTitle, (ML + midX - 10) / 2 + ML / 2, y + 10, { align: 'center' });
+        doc.text(leftTitle, leftCenterX, y + 10, { align: 'center' });
         doc.text(rightTitle || '', (midX + 10 + W - ML - 5) / 2, y + 10, { align: 'center' });
     }
 }
 
 function writeText(doc, W, ML, y, title, text, italic = false) {
     if (!text) return y;
+    const startX = ML + (italic ? 0 : 2);
+    let titleWidth = 0;
     if (title) {
-        doc.setFont('times', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...COLORS.PRIMARY_BLUE);
-        doc.text(title, ML + 2, y); y += 5;
+        doc.setFont('times', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(...COLORS.PRIMARY_BLUE);
+        doc.text(title, startX, y);
+        titleWidth = doc.getTextWidth(title) + 1.5; // 1.5mm space after the title
     }
+
     doc.setFont('times', italic ? 'italic' : 'normal');
-    doc.setFontSize(8); doc.setTextColor(...(italic ? COLORS.GRAY_TEXT : COLORS.BLACK));
-    const lines = doc.splitTextToSize(text, W - ML * 2 - 4);
-    doc.text(lines, ML + (italic ? 0 : 2), y);
-    return y + lines.length * 4 + 3;
+    doc.setFontSize(8);
+    doc.setTextColor(...(italic ? COLORS.GRAY_TEXT : COLORS.BLACK));
+
+    const availableWidthFirstLine = (W - ML * 2 - 4) - titleWidth;
+    const availableWidthRest = W - ML * 2 - 4;
+
+    if (doc.getTextWidth(text) <= availableWidthFirstLine) {
+        doc.text(text, startX + titleWidth, y);
+        return y + 4.5;
+    } else {
+        const words = text.split(' ');
+        let currentLine = '';
+        const lines = [];
+        let isFirstLine = true;
+
+        for (const word of words) {
+            const testLine = currentLine ? currentLine + ' ' + word : word;
+            const targetWidth = isFirstLine ? availableWidthFirstLine : availableWidthRest;
+            if (doc.getTextWidth(testLine) <= targetWidth) {
+                currentLine = testLine;
+            } else {
+                if (currentLine) {
+                    lines.push(currentLine);
+                }
+                currentLine = word;
+                isFirstLine = false;
+            }
+        }
+        if (currentLine) {
+            lines.push(currentLine);
+        }
+
+        if (lines.length > 0) {
+            doc.text(lines[0], startX + titleWidth, y);
+        }
+        let currentY = y;
+        for (let i = 1; i < lines.length; i++) {
+            currentY += 4;
+            doc.text(lines[i], startX, currentY);
+        }
+        return currentY + 4.5;
+    }
 }
 
 function drawPageDecorations(doc, W) {
-    const H = 297;
+    const H = doc.internal.pageSize.getHeight();
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
@@ -294,101 +468,218 @@ function drawPageDecorations(doc, W) {
         doc.rect(0, 4, W, 1.5, 'F');
 
         doc.setFillColor(...COLORS.PRIMARY_BLUE);
-        doc.triangle(W, H, W - 40, H, W, H - 20, 'F');
+        doc.triangle(W, H, W - 35, H, W, H - 18, 'F');
         doc.setFillColor(...COLORS.LIGHT_BLUE);
-        doc.triangle(W - 20, H, W - 60, H, W, H - 17, 'F');
+        doc.triangle(W - 18, H, W - 55, H, W, H - 15, 'F');
     }
     doc.setPage(pageCount);
 }
 
-export async function generatePDF(data) {
-    const { docType } = data;
+function drawBankFooter(doc, W, ML, y) {
+    const accounts = [
+        ['Banpro (Billetera Móvil - C$)', '83866806'],
+        ['BAC (C$)', '364544957'],
+        ['BAC ($)', '364990713'],
+        ['Grupo LAFISE ($)', '117290083'],
+        ['Avanz ($)', '114605530102'],
+        ['FICOSA ($)', '23646501000012'],
+    ];
+
+    const half = Math.ceil(accounts.length / 2);
+    const leftCol = accounts.slice(0, half);
+    const rightCol = accounts.slice(half);
+
+    const bodyRows = [];
+    for (let i = 0; i < half; i++) {
+        const l = leftCol[i] || ['', ''];
+        const r = rightCol[i] || ['', ''];
+        bodyRows.push([l[0], l[1], r[0], r[1]]);
+    }
+
+    doc.setFont('times', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...COLORS.PRIMARY_BLUE);
+    doc.text('INFORMACIÓN DE PAGO', ML + 2, y); y += 5;
+
+    doc.setFont('times', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...COLORS.BLACK);
+    doc.text('María Auxiliadora Torres Montalvan', ML + 2, y); y += 5;
+
+    autoTable(doc, {
+        startY: y,
+        head: [['CUENTA', 'NÚMERO', 'CUENTA', 'NÚMERO']],
+        body: bodyRows,
+        theme: 'grid',
+        margin: { left: ML, right: ML },
+        styles: {
+            font: 'times',
+            fontSize: 7,
+            textColor: COLORS.GRAY_TEXT,
+            lineColor: COLORS.PRIMARY_BLUE,
+            lineWidth: 0.1,
+            cellPadding: 1.2,
+        },
+        headStyles: {
+            fillColor: COLORS.PRIMARY_BLUE,
+            textColor: COLORS.WHITE,
+            fontStyle: 'bold',
+            fontSize: 7,
+            halign: 'center',
+        },
+        columnStyles: {
+            0: { halign: 'left', cellWidth: (W - ML * 2) * 0.35 },
+            1: { halign: 'right', cellWidth: (W - ML * 2) * 0.15 },
+            2: { halign: 'left', cellWidth: (W - ML * 2) * 0.35 },
+            3: { halign: 'right', cellWidth: (W - ML * 2) * 0.15 },
+        },
+        bodyStyles: { fillColor: COLORS.WHITE },
+        alternateRowStyles: { fillColor: [248, 250, 255] },
+    });
+
+    return doc.lastAutoTable.finalY + 3;
+}
+
+export async function generatePDF(data, calibrationOffsets?: CalibrationOffsets) {
+    if (esFacturaPorConceptos(data)) facturaConceptosSchema.parse(data);
+    resolveCompany(data);
+    const rawFecha = data.fechaDoc || data.fecha;
+    const normalizedData = {
+        ...data,
+        fechaDoc: rawFecha ? String(rawFecha).slice(0, 10) : undefined,
+    };
+    const { docType } = normalizedData;
     let doc;
-    if (docType === 'proforma') doc = await genProforma(data);
-    else if (docType === 'confirmacion') doc = await genConfirmacion(data);
-    else if (docType === 'factura') doc = await genFactura(data);
-    else if (docType === 'contrato') doc = await genContrato(data);
-    else doc = await genConfirmacion(data);
+    if (docType === 'proforma') doc = await genProforma(normalizedData);
+    else if (docType === 'confirmacion') doc = await genConfirmacion(normalizedData);
+    else if (docType === 'factura') doc = await genFactura(normalizedData, calibrationOffsets);
+    else if (docType === 'contrato') doc = await genContrato(normalizedData);
+    else doc = await genConfirmacion(normalizedData);
     return doc;
 }
 
-async function drawSharedBody(doc, W, ML, y, data) {
-    doc.setFont('times', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(...COLORS.GRAY_TEXT);
-    doc.text(fmtDateStr(data.fechaDoc), ML + 45, y - 10);
+async function drawClientSection(doc, W, ML, y, data, compact = false) {
+    const rowFn = compact ? twoColRowCompact : twoColRow;
+    if (!compact) {
+        doc.setFont('times', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(...COLORS.GRAY_TEXT);
+        doc.text(fmtDateStr(data.fechaDoc), ML + 45, y - 10);
+    }
 
     y = await drawSectionHeader(doc, ICON_USER, 'DATOS DEL CLIENTE', y, W, ML);
-    y = twoColRow(doc, ML, y, 'Nombre:', data.cliente, W);
-    y = twoColRow(doc, ML, y, 'Cédula / RUC:', data.ruc, W);
-    y = twoColRow(doc, ML, y, 'Teléfono / Correo:', `${data.telefono || ''}  |  ${data.correo || ''}`, W);
-    if (data.direccion) y = twoColRow(doc, ML, y, 'Dirección:', data.direccion, W);
+    y = rowFn(doc, ML, y, 'Nombre:', data.cliente, W);
+    y = rowFn(doc, ML, y, 'Cédula / RUC:', data.ruc, W);
+    const telCorreo = [data.telefono, data.correo].filter(Boolean).join('  |  ');
+    y = rowFn(doc, ML, y, 'Teléfono / Correo:', telCorreo, W);
+    y = rowFn(doc, ML, y, 'Dirección:', data.direccion, W);
     y += 2;
 
+    return y;
+}
+
+async function drawVehicleSection(doc, W, ML, y, data, compact = false) {
+    const rowFn = compact ? twoColRowCompact : twoColRow;
     y = await drawSectionHeader(doc, ICON_CAR, 'DATOS DEL VEHÍCULO', y, W, ML);
-    y = twoColRow(doc, ML, y, 'Vehículo / Tipo:', `${data.vehiculo || ''} / ${data.tipoVehiculo || ''}`, W);
-    y = twoColRow(doc, ML, y, 'Modelo / Año:', data.modelo, W);
-    y = twoColRow(doc, ML, y, 'Transmisión:', data.transmision, W);
-    y = twoColRow(doc, ML, y, 'Placa:', data.placa, W);
-    if (data.detalles) y = twoColRow(doc, ML, y, 'Detalles:', data.detalles, W);
+    y = rowFn(doc, ML, y, 'Vehículo / Tipo:', `${data.vehiculo || ''} / ${data.tipoVehiculo || ''}`, W);
+    y = rowFn(doc, ML, y, 'Modelo / Año:', data.modelo, W);
+    y = rowFn(doc, ML, y, 'Transmisión:', data.transmision, W);
+    y = rowFn(doc, ML, y, 'Placa:', data.placa, W);
+    if (data.color) y = rowFn(doc, ML, y, 'Color:', data.color, W);
+    if (data.detalles) y = rowFn(doc, ML, y, 'Detalles:', data.detalles, W);
     y += 2;
 
     y = await drawSectionHeader(doc, ICON_CALENDAR, 'DETALLES DE LA RESERVA', y, W, ML);
-    y = twoColRow(doc, ML, y, 'Recogida:', `${data.lugRec || 'Managua'}  |  ${fmtDateStr(data.frec)}  |  ${data.hrec || '08:00'}`, W);
-    y = twoColRow(doc, ML, y, 'Devolución:', `${data.lugDev || 'Managua'}  |  ${fmtDateStr(data.fdev)}  |  ${data.hdev || '10:00'}`, W);
+    y = rowFn(doc, ML, y, 'Recogida:', `${data.lugRec || 'Managua'}  |  ${fmtDateStr(data.frec)}  |  ${data.hrec || '08:00'}`, W);
+    y = rowFn(doc, ML, y, 'Devolución:', `${data.lugDev || 'Managua'}  |  ${fmtDateStr(data.fdev)}  |  ${data.hdev || '10:00'}`, W);
     y += 3;
 
+    return y;
+}
+
+async function drawMoneySection(doc, W, ML, y, data) {
     y = await drawSectionHeader(doc, ICON_MONEY, 'RESUMEN DE MONTOS', y, W, ML); y += 2;
 
-    const sub = (parseFloat(data.dias) || 0) * (parseFloat(data.precio) || 0);
+    const porConceptos = esFacturaPorConceptos(data);
+    const sub = porConceptos ? calcularTotalConceptos(data.conceptosFactura) : (parseFloat(data.dias) || 0) * (parseFloat(data.precio) || 0);
 
     let choferTotal = 0, viaticosTotal = 0, hospedajeTotal = 0;
-    if (data.hasOtrosServicios) {
+    if (!porConceptos && data.hasOtrosServicios) {
         choferTotal = (parseFloat(data.choferDias) || 0) * (parseFloat(data.choferPrecio) || 0);
         viaticosTotal = (parseFloat(data.viaticosDias) || 0) * (parseFloat(data.viaticosPrecio) || 0);
         hospedajeTotal = (parseFloat(data.hospedajeDias) || 0) * (parseFloat(data.hospedajePrecio) || 0);
     }
 
-    const totalUSD = sub + (parseFloat(data.deposito) || 0) + choferTotal + viaticosTotal + hospedajeTotal;
-    const totalNIO = totalUSD * (parseFloat(data.tasa) || 36.5);
+    const deposito = porConceptos ? 0 : parseFloat(data.deposito) || 0;
+
+    const tasa = parseFloat(data.tasa) || 36.6243;
+    const conceptosNIO = porConceptos && data.monedaConceptos === 'NIO';
+    const totalUSD = conceptosNIO ? sub / tasa : sub + deposito + choferTotal + viaticosTotal + hospedajeTotal;
+    const totalNIO = conceptosNIO ? sub : totalUSD * tasa;
 
     const hasExtras = choferTotal > 0 || viaticosTotal > 0 || hospedajeTotal > 0;
 
-    const bodyRows = [
+    const blank = v => {
+        const val = parseFloat(v);
+        if (!val) return '';
+        return String(v);
+    };
+    const esBlanco = totalUSD === 0 &&
+                     !data.cliente &&
+                     !data.depositoLabel &&
+                     !data.choferLabel &&
+                     !data.viaticosLabel &&
+                     !data.hospedajeLabel &&
+                     !data.choferDias &&
+                     !data.choferPrecio &&
+                     !data.viaticosDias &&
+                     !data.viaticosPrecio &&
+                     !data.hospedajeDias &&
+                     !data.hospedajePrecio &&
+                     !data.deposito;
+
+    const c = (name) => esBlanco ? '' : name;
+
+    const hasRenta = (parseFloat(data.dias) > 0 || parseFloat(data.precio) > 0);
+    const hasDep = (parseFloat(data.deposito) > 0) || !!data.depositoLabel;
+    const hasChof = (parseFloat(data.choferDias) > 0 || parseFloat(data.choferPrecio) > 0) || !!data.choferLabel;
+    const hasViat = (parseFloat(data.viaticosDias) > 0 || parseFloat(data.viaticosPrecio) > 0) || !!data.viaticosLabel;
+    const hasHosp = (parseFloat(data.hospedajeDias) > 0 || parseFloat(data.hospedajePrecio) > 0) || !!data.hospedajeLabel;
+
+    const bodyRows = porConceptos ? (data.conceptosFactura || []).map(item => [
+        item.descripcion.trim(), String(item.cantidad), conceptosNIO ? fmtc(item.precioUnitario) : fmt(item.precioUnitario), conceptosNIO ? fmtc(calcularImporteConcepto(item)) : fmt(calcularImporteConcepto(item)),
+    ]) : [
         hasExtras
-            ? ['Renta del Vehículo', data.dias || '-', fmt(data.precio), fmt(data.deposito), '-', fmt(sub)]
-            : ['Renta del Vehículo', data.dias || '-', fmt(data.precio), fmt(data.deposito), fmt(sub)]
+            ? [hasRenta ? c('Renta del Vehículo') : '', hasRenta ? blank(data.dias) : '', hasRenta ? fmt(data.precio) : '', '', hasRenta ? fmt(sub) : '']
+            : [hasRenta ? c('Renta del Vehículo') : '', hasRenta ? blank(data.dias) : '', hasRenta ? fmt(data.precio) : '', hasRenta ? fmt(sub) : ''],
+        hasExtras
+            ? [hasDep ? c(getCustomLabel('deposito', 'Depósito en Garantía', data)) : '', '', '', '', hasDep ? fmt(data.deposito) : '']
+            : [hasDep ? c(getCustomLabel('deposito', 'Depósito en Garantía', data)) : '', '', '', hasDep ? fmt(data.deposito) : ''],
+        hasExtras
+            ? [hasChof ? c(getCustomLabel('chofer', 'Servicio de Chofer', data)) : '', hasChof ? blank(data.choferDias) : '', hasChof ? fmt(data.choferPrecio) : '', '', hasChof ? fmt(choferTotal) : '']
+            : [hasChof ? c(getCustomLabel('chofer', 'Servicio de Chofer', data)) : '', hasChof ? blank(data.choferDias) : '', hasChof ? fmt(data.choferPrecio) : '', hasChof ? fmt(choferTotal) : ''],
+        hasExtras
+            ? [hasViat ? c(getCustomLabel('viaticos', 'Viáticos', data)) : '', hasViat ? blank(data.viaticosDias) : '', hasViat ? fmt(data.viaticosPrecio) : '', '', hasViat ? fmt(viaticosTotal) : '']
+            : [hasViat ? c(getCustomLabel('viaticos', 'Viáticos', data)) : '', hasViat ? blank(data.viaticosDias) : '', hasViat ? fmt(data.viaticosPrecio) : '', hasViat ? fmt(viaticosTotal) : ''],
+        hasExtras
+            ? [hasHosp ? c(getCustomLabel('hospedaje', 'Hospedaje', data)) : '', hasHosp ? blank(data.hospedajeDias) : '', hasHosp ? fmt(data.hospedajePrecio) : '', '', hasHosp ? fmt(hospedajeTotal) : '']
+            : [hasHosp ? c(getCustomLabel('hospedaje', 'Hospedaje', data)) : '', hasHosp ? blank(data.hospedajeDias) : '', hasHosp ? fmt(data.hospedajePrecio) : '', hasHosp ? fmt(hospedajeTotal) : ''],
     ];
 
-    if (choferTotal > 0) {
-        bodyRows.push(hasExtras
-            ? ['Servicio de Chofer', data.choferDias || '-', fmt(data.choferPrecio), '-', '-', fmt(choferTotal)]
-            : ['Servicio de Chofer', data.choferDias || '-', fmt(data.choferPrecio), '-', fmt(choferTotal)]);
-    }
-    if (viaticosTotal > 0) {
-        bodyRows.push(hasExtras
-            ? ['Viáticos', data.viaticosDias || '-', fmt(data.viaticosPrecio), '-', '-', fmt(viaticosTotal)]
-            : ['Viáticos', data.viaticosDias || '-', fmt(data.viaticosPrecio), '-', fmt(viaticosTotal)]);
-    }
-    if (hospedajeTotal > 0) {
-        bodyRows.push(hasExtras
-            ? ['Hospedaje', data.hospedajeDias || '-', fmt(data.hospedajePrecio), '-', '-', fmt(hospedajeTotal)]
-            : ['Hospedaje', data.hospedajeDias || '-', fmt(data.hospedajePrecio), '-', fmt(hospedajeTotal)]);
-    }
+    const tableHead = porConceptos ? [['Concepto', 'Cantidad', 'Precio unitario', 'Importe']] : hasExtras
+        ? [['Concepto', 'Días', 'Monto/Día', 'Chofer', 'Subtotal']]
+        : [['Concepto', 'Días', 'Monto/Día', 'Subtotal']];
 
-    const tableHead = hasExtras
-        ? [['Concepto', 'Días', 'Monto/Día', 'Depósito', 'Chofer', 'Subtotal']]
-        : [['Concepto', 'Días', 'Monto/Día', 'Depósito', 'Subtotal']];
-
-    const footColSpan = hasExtras ? 5 : 4;
+    const footColSpan = hasExtras ? 4 : 3;
 
     autoTable(doc, {
         startY: y,
         head: tableHead,
         body: bodyRows,
+        showFoot: porConceptos ? 'lastPage' : 'everyPage',
         foot: [
-            [{ content: 'TOTAL USD', colSpan: footColSpan, styles: { halign: 'right', textColor: COLORS.PRIMARY_BLUE, fillColor: COLORS.LIGHT_BLUE } }, { content: fmt(totalUSD), styles: { textColor: COLORS.PRIMARY_BLUE, fillColor: COLORS.LIGHT_BLUE } }],
-            [{ content: `Total en Córdobas (Tasa: ${data.tasa || 36.5})`, colSpan: footColSpan, styles: { halign: 'right', fillColor: COLORS.PRIMARY_BLUE, textColor: COLORS.WHITE } }, { content: fmtc(totalNIO), styles: { fillColor: COLORS.PRIMARY_BLUE, textColor: COLORS.WHITE } }],
+            [{ content: conceptosNIO ? 'TOTAL CÓRDOBAS' : 'TOTAL USD', colSpan: footColSpan, styles: { halign: 'right', textColor: COLORS.PRIMARY_BLUE, fillColor: COLORS.LIGHT_BLUE } }, { content: conceptosNIO ? fmtc(totalNIO) : fmt(totalUSD), styles: { textColor: COLORS.PRIMARY_BLUE, fillColor: COLORS.LIGHT_BLUE } }],
+            [{ content: conceptosNIO ? `Equivalente en USD (Tasa: ${tasa})` : `Total en Córdobas (Tasa: ${tasa})`, colSpan: footColSpan, styles: { halign: 'right', fillColor: COLORS.LIGHT_BLUE, textColor: COLORS.PRIMARY_BLUE } }, { content: conceptosNIO ? fmt(totalUSD) : fmtc(totalNIO), styles: { fillColor: COLORS.LIGHT_BLUE, textColor: COLORS.PRIMARY_BLUE } }],
         ],
         theme: 'grid',
         margin: { left: ML, right: ML },
@@ -409,54 +700,99 @@ async function drawSharedBody(doc, W, ML, y, data) {
         },
         bodyStyles: { fillColor: COLORS.WHITE },
         alternateRowStyles: { fillColor: [248, 250, 255] },
-        columnStyles: { 0: { halign: 'left' } },
-        footStyles: { fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, lineColor: COLORS.WHITE }
+        columnStyles: porConceptos ? {
+            0: { halign: 'left', cellWidth: (W - ML * 2) * 0.58 },
+            1: { cellWidth: (W - ML * 2) * 0.12 },
+            2: { cellWidth: (W - ML * 2) * 0.15 },
+            3: { cellWidth: (W - ML * 2) * 0.15 },
+        } : { 0: { halign: 'left' } },
+        footStyles: { fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, lineColor: COLORS.PRIMARY_BLUE }
     });
     return doc.lastAutoTable.finalY + 4;
+}
+
+async function drawSharedBody(doc, W, ML, y, data, compact = false) {
+    y = await drawClientSection(doc, W, ML, y, data, compact);
+    y = await drawVehicleSection(doc, W, ML, y, data, compact);
+    y = await drawMoneySection(doc, W, ML, y, data);
+    return y;
 }
 
 // --- DOCUMENTOS ---
 
 async function genConfirmacion(data) {
     const { doc, W, ML } = setupPDF();
-    let y = await drawHeader(doc, W, ML, 0, 'CONFIRMACIÓN DE RESERVA');
+    let y = await drawHeaderCompact(doc, W, ML, 'CONFIRMACIÓN DE RESERVA', data.docNum || data.facturaNum);
 
-    y = await drawSharedBody(doc, W, ML, y, data);
+    doc.setFont('times', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...COLORS.PRIMARY_BLUE);
+    doc.text('Fecha:', ML, y);
+    doc.setFont('times', 'normal');
+    doc.setTextColor(...COLORS.BLACK);
+    doc.text(fmtDateStr(data.fechaDoc), ML + 12, y);
+    y += 6;
 
-    doc.setDrawColor(...COLORS.PRIMARY_BLUE);
-    doc.setLineWidth(0.4);
-    doc.line(ML, y, W - ML, y); y += 4;
+    y = await drawSharedBody(doc, W, ML, y, data, true);
 
-    doc.setFillColor(...COLORS.WHITE);
-    const sx = ML + 8;
-    const sy = y + 5;
-    doc.setDrawColor(...COLORS.PRIMARY_BLUE);
-    doc.setLineWidth(0.5);
-    doc.circle(sx, sy, 4);
-    doc.line(sx - 1.5, sy, sx - 0.5, sy + 1.5);
-    doc.line(sx - 0.5, sy + 1.5, sx + 2, sy - 1.5);
+    if (!data.sinNotaCredito) {
+        doc.setDrawColor(...COLORS.PRIMARY_BLUE);
+        doc.setLineWidth(0.4);
+        doc.line(ML, y, W - ML, y); y += 4;
 
-    doc.setFont('times', 'italic');
-    doc.setFontSize(8.5);
-    doc.setTextColor(...COLORS.GRAY_TEXT);
-    const lines = doc.splitTextToSize(LEGAL_TEXT, W - ML * 2 - 15);
-    doc.text(lines, ML + 15, y + 2);
-    y += lines.length * 4 + 6;
+        doc.setFillColor(...COLORS.WHITE);
+        const sx = ML + 8;
+        const sy = y + 5;
+        doc.setDrawColor(...COLORS.PRIMARY_BLUE);
+        doc.setLineWidth(0.5);
+        doc.circle(sx, sy, 4);
+        doc.line(sx - 1.5, sy, sx - 0.5, sy + 1.5);
+        doc.line(sx - 0.5, sy + 1.5, sx + 2, sy - 1.5);
+
+        doc.setFont('times', 'italic');
+        doc.setFontSize(8.5);
+        doc.setTextColor(...COLORS.GRAY_TEXT);
+        const lines = doc.splitTextToSize(LEGAL_TEXT, W - ML * 2 - 15);
+        doc.text(lines, ML + 15, y + 2);
+        y += lines.length * 4 + 8;
+    } else {
+        y += 10;
+    }
+
+    const sigY = Math.max(y + 12, 235);
+    await drawSignatures(doc, W, ML, sigY, CURRENT_COMPANY.NAME, data.cliente, 'TM RENT A CAR', 'Cliente', !data.sinFirma);
 
     drawPageDecorations(doc, W);
 
     return doc;
 }
 
-async function genFactura(data) {
-    const { doc, W, ML } = setupPDF();
-    let y = await drawHeader(doc, W, ML, 0, 'FACTURA', data.facturaNum || '______');
+async function genFactura(data, offsets: CalibrationOffsets = DEFAULT_OFFSETS) {
+    const { doc, W, ML: baseML } = setupPDF();
+    const ML = baseML + offsets.general.x;
+    let y = offsets.general.y;
 
-    y = await drawSharedBody(doc, W, ML, y, data);
-    y = writeText(doc, W, ML, y, 'Nota:', data.nota);
+    y = await drawHeader(doc, W, ML, y, 'FACTURA', data.facturaNum || data.docNum || '______');
+    y += offsets.fecha.y;
+
+    y = await drawClientSection(doc, W, ML, y + offsets.cliente.y, data);
+
+    y = await drawMoneySection(doc, W, ML, y + offsets.tabla.y, data);
+    y += offsets.totales.y;
+
+    if (esFacturaPorConceptos(data) && y > 190) {
+        doc.addPage();
+        y = 20;
+    }
+    y = drawBankFooter(doc, W, ML, y + 4);
+    y = writeText(doc, W, ML, y + 4 + offsets.observaciones.y, 'Nota:', data.nota);
     y = writeText(doc, W, ML, y, 'Observaciones:', data.obs);
-
-    drawSignatures(doc, W, ML, 250, COMPANY.NAME, data.cliente, 'TM RENT A CAR', 'Cliente');
+    if (esFacturaPorConceptos(data) && y > 245) {
+        doc.addPage();
+        y = 20;
+    }
+    const firmaY = esFacturaPorConceptos(data) ? Math.max(245, y + 15) : 265;
+    await drawSignatures(doc, W, ML, firmaY + offsets.firmas.y + offsets.general.y, CURRENT_COMPANY.NAME, data.cliente, 'TM RENT A CAR', 'Cliente', !data.sinFirma);
     drawPageDecorations(doc, W);
     return doc;
 }
@@ -472,31 +808,13 @@ async function genProforma(data) {
     y = await drawSectionHeader(doc, ICON_USER, 'DATOS DEL CLIENTE', y, W, ML);
     y = twoColRow(doc, ML, y, 'Cliente:', data.cliente, W);
     y = twoColRow(doc, ML, y, 'RUC / Cédula:', data.ruc, W);
+    y = twoColRow(doc, ML, y, 'Teléfono:', data.telefono, W);
+    if (data.direccion) y = twoColRow(doc, ML, y, 'Dirección:', data.direccion, W);
     y = twoColRow(doc, ML, y, 'Correo:', data.correo, W);
     y += 4;
 
     y = await drawSectionHeader(doc, ICON_CAR, 'DETALLE DEL ALQUILER', y, W, ML);
     y += 2;
-
-    const vehRows = (data.vehiculos || []).map(v => [
-        v.name || '',
-        v.model || '',
-        v.days || '',
-        fmt(v.price)
-    ]);
-    while (vehRows.length < 2) vehRows.push(['', '', '', '']);
-
-    autoTable(doc, {
-        startY: y,
-        head: [['Vehículo', 'Modelo / Año', 'Días', 'Precio/Día']],
-        body: vehRows,
-        theme: 'grid',
-        margin: { left: ML, right: ML },
-        styles: { font: 'times', lineColor: COLORS.LIGHT_BLUE, lineWidth: 0.1, textColor: COLORS.GRAY_TEXT, fontSize: 8.5 },
-        headStyles: { fillColor: COLORS.PRIMARY_BLUE, fontStyle: 'bold', textColor: COLORS.WHITE },
-        alternateRowStyles: { fillColor: [248, 250, 255] }
-    });
-    y = doc.lastAutoTable.finalY + 6;
 
     let sub = 0;
     (data.vehiculos || []).forEach(v => sub += (parseFloat(v.days) || 0) * (parseFloat(v.price) || 0));
@@ -510,21 +828,34 @@ async function genProforma(data) {
 
     const total = sub + (parseFloat(data.deposito) || 0) + choferTotal + viaticosTotal + hospedajeTotal;
 
-    const bodyResumen = [];
-    if (parseFloat(data.deposito) > 0) bodyResumen.push(['Depósito', fmt(data.deposito)]);
-    if (choferTotal > 0) bodyResumen.push(['Chofer', fmt(choferTotal)]);
-    if (viaticosTotal > 0) bodyResumen.push(['Viáticos', fmt(viaticosTotal)]);
-    if (hospedajeTotal > 0) bodyResumen.push(['Hospedaje', fmt(hospedajeTotal)]);
-    if (bodyResumen.length === 0) bodyResumen.push(['Cargos Adicionales', '$0.00']);
+    const unifiedBody = [
+        ...(data.vehiculos || []).map(v => [
+            v.name || '',
+            v.model || '',
+            v.color || '',
+            String(v.days || ''),
+            fmt(v.price),
+            fmt((parseFloat(v.days) || 0) * (parseFloat(v.price) || 0)),
+        ]),
+    ];
+    if (parseFloat(data.deposito) > 0) unifiedBody.push(['Depósito', '', '', '', '', fmt(data.deposito)]);
+    if (choferTotal > 0) unifiedBody.push(['Servicio de Chofer', '', '', '', '', fmt(choferTotal)]);
+    if (viaticosTotal > 0) unifiedBody.push(['Viáticos', '', '', '', '', fmt(viaticosTotal)]);
+    if (hospedajeTotal > 0) unifiedBody.push(['Hospedaje', '', '', '', '', fmt(hospedajeTotal)]);
 
     autoTable(doc, {
         startY: y,
-        body: bodyResumen,
-        foot: [['TOTAL A PAGAR', fmt(total)]],
+        head: [['Vehículo', 'Modelo / Año', 'Color', 'Días', 'Precio/Día', 'Subtotal']],
+        body: unifiedBody,
+        foot: [
+            [{ content: 'TOTAL A PAGAR', colSpan: 5, styles: { halign: 'right', fillColor: COLORS.PRIMARY_BLUE, textColor: COLORS.WHITE, fontStyle: 'bold' } }, { content: fmt(total), styles: { fillColor: COLORS.PRIMARY_BLUE, textColor: COLORS.WHITE, fontStyle: 'bold' } }],
+        ],
         theme: 'grid',
-        margin: { left: ML + 80, right: ML },
+        margin: { left: ML, right: ML },
         styles: { font: 'times', lineColor: COLORS.LIGHT_BLUE, lineWidth: 0.1, textColor: COLORS.GRAY_TEXT, fontSize: 8.5 },
-        footStyles: { fillColor: COLORS.PRIMARY_BLUE, textColor: COLORS.WHITE, fontStyle: 'bold', fontSize: 9 }
+        headStyles: { fillColor: COLORS.PRIMARY_BLUE, fontStyle: 'bold', textColor: COLORS.WHITE },
+        alternateRowStyles: { fillColor: [248, 250, 255] },
+        footStyles: { fontSize: 9, lineWidth: 0.1, lineColor: COLORS.WHITE }
     });
     y = doc.lastAutoTable.finalY + 8;
 
@@ -537,17 +868,18 @@ async function genProforma(data) {
         y += lines.length * 4 + 6;
     }
 
+    const validezDias = data.validezDias !== undefined && data.validezDias !== "" ? data.validezDias : 10;
     doc.setFont('times', 'italic'); doc.setFontSize(8); doc.setTextColor(...COLORS.GRAY_TEXT);
-    doc.text('Proforma válida por 10 días a partir de la fecha emitida.', W / 2, y, { align: 'center' });
+    doc.text(`Proforma válida por ${validezDias} días a partir de la fecha emitida.`, W / 2, y, { align: 'center' });
 
-    drawSignatures(doc, W, ML, 260, COMPANY.NAME, '', 'TM RENT A CAR', '');
+    await drawSignatures(doc, W, ML, 260, CURRENT_COMPANY.NAME, data.cliente, 'TM RENT A CAR', data.ruc || '', !data.sinFirma);
     drawPageDecorations(doc, W);
     return doc;
 }
 
 async function genContrato(data) {
     const { doc, W, ML } = setupPDF();
-    let y = await drawHeader(doc, W, ML, 0, 'CONTRATO DE ARRENDAMIENTO');
+    let y = await drawHeaderCompact(doc, W, ML, 'CONTRATO DE ARRENDAMIENTO', data.docNum || data.facturaNum);
 
     const dateStr = data.fechaDoc;
     const d = dateStr ? dateStr.split('-')[2] : '___';
@@ -561,20 +893,20 @@ async function genContrato(data) {
     y += introLines.length * 4 + 2;
 
     y = await drawSectionHeader(doc, ICON_USER, 'DATOS DEL ARRENDATARIO', y, W, ML);
-    y = twoColRow(doc, ML, y, 'Nombre completo:', data.cliente, W);
-    y = twoColRow(doc, ML, y, 'Cédula / RUC:', data.ruc, W);
-    y = twoColRow(doc, ML, y, 'Dirección:', data.direccion, W);
-    y = twoColRow(doc, ML, y, 'Teléfono / Correo:', `${data.telefono || ''}  |  ${data.correo || ''}`, W);
-    y = twoColRow(doc, ML, y, 'Conductor Autorizado:', data.conductor, W);
-    y += 2;
+    y = twoColRowCompact(doc, ML, y, 'Nombre completo:', data.cliente, W);
+    y = twoColRowCompact(doc, ML, y, 'Cédula / RUC:', data.ruc, W);
+    y = twoColRowCompact(doc, ML, y, 'Dirección:', data.direccion, W);
+    const telCorreo = [data.telefono, data.correo].filter(Boolean).join('  |  ');
+    y = twoColRowCompact(doc, ML, y, 'Teléfono / Correo:', telCorreo, W);
+    y = twoColRowCompact(doc, ML, y, 'Conductor Autorizado:', data.conductor, W);
 
     y = await drawSectionHeader(doc, ICON_FILE, 'DATOS DEL VEHÍCULO Y RESERVA', y, W, ML);
-    y = twoColRow(doc, ML, y, 'Vehículo / Tipo:', `${data.vehiculo || ''} / ${data.tipoVehiculo || ''}`, W);
-    y = twoColRow(doc, ML, y, 'Modelo / Transmisión:', `${data.modelo || ''} / ${data.transmision || ''}`, W);
-    y = twoColRow(doc, ML, y, 'Placa:', data.placa, W);
-    y = twoColRow(doc, ML, y, 'Entrega (Fecha/Hora):', `${fmtDateStr(data.frec)} a las ${data.hrec || ''}`, W);
-    y = twoColRow(doc, ML, y, 'Devolución (Fecha/Hora):', `${fmtDateStr(data.fdev)} a las ${data.hdev || ''}`, W);
-    y += 2;
+    y = twoColRowCompact(doc, ML, y, 'Vehículo / Tipo:', `${data.vehiculo || ''} / ${data.tipoVehiculo || ''}`, W);
+    y = twoColRowCompact(doc, ML, y, 'Modelo / Transmisión:', `${data.modelo || ''} / ${data.transmision || ''}`, W);
+    y = twoColRowCompact(doc, ML, y, 'Placa:', data.placa, W);
+    if (data.color) y = twoColRowCompact(doc, ML, y, 'Color:', data.color, W);
+    y = twoColRowCompact(doc, ML, y, 'Entrega (Fecha/Hora):', `${fmtDateStr(data.frec)} a las ${data.hrec || ''}`, W);
+    y = twoColRowCompact(doc, ML, y, 'Devolución (Fecha/Hora):', `${fmtDateStr(data.fdev)} a las ${data.hdev || ''}`, W);
 
     const sub = (parseFloat(data.dias) || 0) * (parseFloat(data.precio) || 0);
     let choferTotal = 0;
@@ -584,14 +916,13 @@ async function genContrato(data) {
     const totalUSD = sub + (parseFloat(data.deposito) || 0) + choferTotal;
 
     y = await drawSectionHeader(doc, ICON_MONEY, 'CONDICIONES ECONÓMICAS', y, W, ML);
-    y = twoColRow(doc, ML, y, 'Días de alquiler:', `${data.dias || 0}`, W);
-    y = twoColRow(doc, ML, y, 'Valor del alquiler:', fmt(data.precio), W);
-    y = twoColRow(doc, ML, y, 'Depósito en garantía:', fmt(data.deposito), W);
+    y = twoColRowCompact(doc, ML, y, 'Días de alquiler:', `${data.dias || 0}`, W);
+    y = twoColRowCompact(doc, ML, y, 'Valor del alquiler:', fmt(data.precio), W);
+    y = twoColRowCompact(doc, ML, y, 'Depósito en garantía:', fmt(data.deposito), W);
     if (choferTotal > 0) {
-        y = twoColRow(doc, ML, y, 'Chofer:', fmt(choferTotal), W);
+        y = twoColRowCompact(doc, ML, y, 'Chofer:', fmt(choferTotal), W);
     }
-    y = twoColRow(doc, ML, y, 'TOTAL:', fmt(totalUSD), W);
-    y += 4;
+    y = twoColRowCompact(doc, ML, y, 'TOTAL:', fmt(totalUSD), W);
 
     y = await drawSectionHeader(doc, ICON_CAR, 'ESTADO Y ACCESORIOS DEL VEHÍCULO AL MOMENTO DE LA ENTREGA', y, W, ML);
     doc.setFont('times', 'normal'); doc.setFontSize(8); doc.setTextColor(...COLORS.GRAY_TEXT);
@@ -630,19 +961,18 @@ async function genContrato(data) {
         doc.text(`${checked2}  ${item2.label}`, ML + colWidth, y + (i * 4));
     }
 
-    y += 30;
+    y += 28;
 
     doc.setFont('times', 'bold'); doc.setTextColor(...COLORS.PRIMARY_BLUE);
     doc.text(`Nivel de combustible:`, ML, y);
     doc.setFont('times', 'normal'); doc.setTextColor(...COLORS.GRAY_TEXT);
-    doc.text(data.nivelCombustible || '__________________', ML + 30, y);
+    doc.text(data.nivelCombustible || '', ML + 30, y);
     y += 5;
 
     doc.setFont('times', 'bold'); doc.setTextColor(...COLORS.PRIMARY_BLUE);
     doc.text(`Observaciones:`, ML, y);
     doc.setFont('times', 'normal'); doc.setTextColor(...COLORS.GRAY_TEXT);
-    doc.text(data.obsEntrega || '__________________________________________________', ML + 22, y);
-    y += 8;
+    doc.text(data.obsEntrega || '', ML + 22, y);
 
     // Page 2
     doc.addPage(); y = 10;
@@ -650,9 +980,8 @@ async function genContrato(data) {
     try {
         const vehicleImg = await getVehicleImage(data.tipoVehiculo || 'SUV');
         if (vehicleImg && vehicleImg.w > 1) {
-            const vWidth = 140;
+            const vWidth = 180;
             let vHeight = (vehicleImg.h / vehicleImg.w) * vWidth;
-            if (vHeight < 100) vHeight = 100;
             const vX = (W - vWidth) / 2;
             doc.addImage(vehicleImg.data, 'PNG', vX, y, vWidth, vHeight);
             y += vHeight + 5;
@@ -662,8 +991,10 @@ async function genContrato(data) {
     }
 
     const clauses = [
+        ['1. OBJETO DEL CONTRATO', 'El arrendador entrega al arrendatario, en calidad de arrendamiento, el vehículo descrito en el presente contrato, para uso personal o corporativo, en el territorio de Nicaragua, salvo autorización expresa en contrario.'],
+        ['2. DEPÓSITO EN GARANTÍA', 'El depósito de garantía será devuelto al arrendatario una vez finalizado el contrato y entregado el vehículo, siempre que este sea restituido en las mismas condiciones en que fue recibido, salvo el desgaste normal por su uso. En caso de que el vehículo presente daños, deterioros o faltantes imputables al arrendatario, el depósito de garantía será retenido en su totalidad y no será objeto de devolución. Si el costo de la reparación, reposición o cualquier otro perjuicio ocasionado excediere el monto del depósito de garantía, el arrendatario se obliga a pagar la diferencia necesaria hasta cubrir la totalidad de los daños y perjuicios ocasionados.'],
         ['3. CONDICIÓN DE ENTREGA', 'El arrendatario se compromete a devolver el vehículo en las mismas condiciones en que lo recibió, en tiempo y forma conforme a lo establecido en el presente contrato.'],
-        ['4. POLÍTICA DE PAGO', 'Para clientes corporativos o contratos otorgados a crédito sin depósito en garantía, dicho monto será facturado y deberá ser cancelado conforme a las condiciones de pago acordadas.'],
+        ['4. POLÍTICA DE PAGO', 'Para clientes corporativos o contratos otorgados a crédito sin depósito en garantía, dicho monto será facturado y deberá ser cancelado conforme a las condiciones de pago acordadas. Los arrendatarios que no cuenten con autorización de crédito deberán cancelar el valor total del arrendamiento de contado, al momento de la entrega del vehículo y previo al inicio del servicio.'],
         ['5. OBLIGACIONES', 'El arrendatario se compromete a: a) Utilizar el vehículo responsablemente. b) No permitir conductores no autorizados. c) No usarlo para fines ilícitos. d) Mantenerlo en buen estado. e) Reportar accidentes de inmediato.'],
         ['6. PROHIBICIONES', 'Queda prohibido: conducir bajo efectos de alcohol o sustancias ilícitas; participar en carreras; subarrendar el vehículo; utilizarlo fuera del territorio autorizado sin aprobación previa.'],
         ['7. ACCIDENTES', 'En caso de accidente, el arrendatario deberá notificar inmediatamente al arrendador y a las autoridades. Los daños por negligencia serán responsabilidad del arrendatario.'],
@@ -679,7 +1010,9 @@ async function genContrato(data) {
     const colW = (W - ML * 2 - 8) / 2;
     const leftX = ML;
     const rightX = ML + colW + 8;
-    const half = Math.ceil(clauses.length / 2);
+
+    const leftClauses = clauses.slice(0, 5);
+    const rightClauses = clauses.slice(5);
 
     const fontSize = 8;
     const lineH = 3.5;
@@ -688,18 +1021,20 @@ async function genContrato(data) {
     let leftY = y;
     let rightY = y;
 
-    for (let i = 0; i < half; i++) {
-        const [lTitle, lText] = clauses[i];
-        doc.setFont('times', 'bold'); doc.setFontSize(fontSize); doc.setTextColor(...COLORS.PRIMARY_BLUE);
-        doc.text(lTitle, leftX, leftY); leftY += lineH + 0.5;
-        doc.setFont('times', 'normal'); doc.setTextColor(...COLORS.GRAY_TEXT);
-        const lLines = doc.splitTextToSize(lText, colW);
-        doc.text(lLines, leftX, leftY);
-        leftY += lLines.length * lineH + clauseGap;
+    const maxLen = Math.max(leftClauses.length, rightClauses.length);
+    for (let i = 0; i < maxLen; i++) {
+        if (i < leftClauses.length) {
+            const [lTitle, lText] = leftClauses[i];
+            doc.setFont('times', 'bold'); doc.setFontSize(fontSize); doc.setTextColor(...COLORS.PRIMARY_BLUE);
+            doc.text(lTitle, leftX, leftY); leftY += lineH + 0.5;
+            doc.setFont('times', 'normal'); doc.setTextColor(...COLORS.GRAY_TEXT);
+            const lLines = doc.splitTextToSize(lText, colW);
+            doc.text(lLines, leftX, leftY);
+            leftY += lLines.length * lineH + clauseGap;
+        }
 
-        const rIdx = i + half;
-        if (rIdx < clauses.length) {
-            const [rTitle, rText] = clauses[rIdx];
+        if (i < rightClauses.length) {
+            const [rTitle, rText] = rightClauses[i];
             doc.setFont('times', 'bold'); doc.setFontSize(fontSize); doc.setTextColor(...COLORS.PRIMARY_BLUE);
             doc.text(rTitle, rightX, rightY); rightY += lineH + 0.5;
             doc.setFont('times', 'normal'); doc.setTextColor(...COLORS.GRAY_TEXT);
@@ -711,8 +1046,10 @@ async function genContrato(data) {
 
     y = Math.max(leftY, rightY) + 4;
 
-    const sigY = Math.max(y + 10, 255);
-    drawSignatures(doc, W, ML, sigY, COMPANY.NAME, data.cliente, 'EL ARRENDADOR · TM RENT A CAR', 'EL ARRENDATARIO');
+    const sigY = 255;
+    await drawSignatures(doc, W, ML, sigY, CURRENT_COMPANY.NAME, data.cliente, 'EL ARRENDADOR · TM RENT A CAR', 'EL ARRENDATARIO', !data.sinFirma);
     drawPageDecorations(doc, W);
     return doc;
 }
+
+export { COMPANY };
