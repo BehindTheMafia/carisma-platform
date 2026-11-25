@@ -1,0 +1,2 @@
+ALTER TABLE configuracion_empresa
+  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(10,4) NOT NULL DEFAULT 36.50;
