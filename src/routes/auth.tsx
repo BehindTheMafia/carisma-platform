@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BrandLogo } from "@/components/brand-logo";
+import loginLogo from "@/assets/tm-rent-login-transparent.png";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { z } from "zod";
@@ -89,31 +89,40 @@ function AuthPage() {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       {/* Lado branding */}
-      <div className="relative hidden flex-col justify-between overflow-hidden bg-sidebar p-12 text-sidebar-foreground lg:flex">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-gold/10" />
-        <div className="relative">
-          <BrandLogo size="lg" />
+      <div className="relative hidden flex-col justify-between overflow-hidden bg-[#101820] px-12 py-10 text-white lg:flex xl:px-16">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#172638] via-[#101820] to-[#171611]" />
+        <div className="relative flex flex-1 items-center justify-center">
+          <img
+            src={loginLogo}
+            alt="TM Rent a Car — Donde empieza tu mejor ruta"
+            className="w-full max-w-[560px] object-contain"
+          />
         </div>
-        <div className="relative space-y-4">
-          <h1 className="text-4xl font-bold tracking-tight">
+        <div className="relative max-w-md space-y-3 pb-6">
+          <div className="h-px w-12 bg-[#c7a264]" />
+          <h1 className="text-3xl font-bold tracking-tight xl:text-4xl">
             Administración integral
             <br />
-            <span className="text-gold">de tu flota.</span>
+            <span className="text-[#c7a264]">de tu flota.</span>
           </h1>
-          <p className="max-w-md text-base text-sidebar-foreground/70">
+          <p className="text-sm leading-relaxed text-white/60 xl:text-base">
             Controla vehículos, rentas, clientes, pagos y mantenimientos desde un único panel profesional.
           </p>
         </div>
-        <div className="relative text-xs text-sidebar-foreground/40">
+        <div className="relative text-xs text-white/35">
           © {new Date().getFullYear()} TM RENT A CAR. Todos los derechos reservados.
         </div>
       </div>
 
       {/* Lado formulario */}
-      <div className="flex items-center justify-center bg-background p-6 lg:p-12">
+      <div className="flex items-center justify-center bg-[#101820] px-5 py-8 lg:bg-background lg:p-12">
         <div className="w-full max-w-md space-y-6">
-          <div className="lg:hidden">
-            <BrandLogo />
+          <div className="flex justify-center lg:hidden">
+            <img
+              src={loginLogo}
+              alt="TM Rent a Car — Donde empieza tu mejor ruta"
+              className="w-72 max-w-full object-contain sm:w-80"
+            />
           </div>
           <Card className="border-border shadow-[var(--shadow-elevated)]">
             <CardHeader>
@@ -136,7 +145,7 @@ function AuthPage() {
                       <Label htmlFor="password">Contraseña</Label>
                       <Input id="password" name="password" type="password" autoComplete="current-password" required />
                     </div>
-                    <Button type="submit" className="w-full" disabled={loading}>
+                    <Button type="submit" className="w-full bg-[#bb9255] font-semibold text-[#151719] hover:bg-[#cba76b]" disabled={loading}>
                       {loading ? <Loader2 className="size-4 animate-spin" /> : "Iniciar sesión"}
                     </Button>
                   </form>
@@ -158,7 +167,7 @@ function AuthPage() {
                     <p className="text-xs text-muted-foreground">
                       El primer usuario registrado obtendrá el rol de <strong>Owner</strong>.
                     </p>
-                    <Button type="submit" className="w-full" disabled={loading}>
+                    <Button type="submit" className="w-full bg-[#bb9255] font-semibold text-[#151719] hover:bg-[#cba76b]" disabled={loading}>
                       {loading ? <Loader2 className="size-4 animate-spin" /> : "Crear cuenta"}
                     </Button>
                   </form>
@@ -166,7 +175,7 @@ function AuthPage() {
               </Tabs>
             </CardContent>
           </Card>
-          <p className="text-center text-xs text-muted-foreground">
+          <p className="text-center text-xs text-white/55 lg:text-muted-foreground">
             <Link to="/" className="hover:text-foreground">Volver al inicio</Link>
           </p>
         </div>

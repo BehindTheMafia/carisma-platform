@@ -16,7 +16,7 @@ export function DocumentTabs({
   onTabChange: (id: string) => void;
 }) {
   return (
-    <div className="bg-card p-1.5 rounded-xl border border-border flex flex-wrap sm:flex-nowrap gap-1.5">
+    <div className="bg-card p-1.5 rounded-xl border border-border grid grid-cols-2 sm:flex gap-1.5">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;

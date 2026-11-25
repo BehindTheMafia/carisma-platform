@@ -10,23 +10,11 @@ import {
   X,
   Info,
 } from "lucide-react";
-
-interface Accesorios {
-  circulacion: boolean;
-  seguro: boolean;
-  llave: boolean;
-  radio: boolean;
-  camara: boolean;
-  bocina: boolean;
-  antivuelco: boolean;
-  baca: boolean;
-  alogenos: boolean;
-  traba: boolean;
-  herramientas: boolean;
-  gata: boolean;
-  repuesto: boolean;
-  triangulos: boolean;
-}
+import { INSPECTION_VEHICLE_TYPES, getInspectionVehicleType } from "@/lib/vehicle-types";
+import { Combobox } from "@/components/ui/combobox";
+import { ALL_ACCESORIOS, accesoriosFromArray, type AccesoriosMap } from "@/constants/accesorios";
+import { calcularTotalConceptos, nuevoConceptoFactura, type ConceptoFactura } from "@/lib/factura-conceptos";
+import { ConceptosFacturaForm } from "./ConceptosFacturaForm";
 
 interface Vehiculo {
   id: number;
@@ -34,11 +22,24 @@ interface Vehiculo {
   model: string;
   days: number;
   price: number;
+  color: string;
+}
+
+export interface CompanyData {
+  NAME: string;
+  EMAIL: string;
+  PHONE: string;
+  ADDRESS: string;
+  RUC: string;
 }
 
 export interface FormData {
+  facturaModo?: "renta" | "conceptos";
+  monedaConceptos?: "USD" | "NIO";
+  conceptosFactura?: ConceptoFactura[];
   fechaDoc: string;
   facturaNum: string;
+  docNum: string;
   ciudad: string;
   cliente: string;
   ruc: string;
@@ -53,6 +54,7 @@ export interface FormData {
   transmision: string;
   placa: string;
   detalles: string;
+  color: string;
   lugRec: string;
   lugDev: string;
   frec: string;
@@ -74,7 +76,42 @@ export interface FormData {
   obs: string;
   nivelCombustible: string;
   obsEntrega: string;
-  accesorios: Accesorios;
+  accesorios: AccesoriosMap;
+  sinFirma: boolean;
+  sinNotaCredito: boolean;
+  validezDias?: number;
+  depositoLabel?: string;
+  choferLabel?: string;
+  viaticosLabel?: string;
+  hospedajeLabel?: string;
+  datosEmpresa?: CompanyData;
+  emitidoEn?: string;
+  emitidoPor?: string;
+  emitidoPorNombre?: string;
+}
+
+interface AvailableVehicle {
+  id: string;
+  codigo: string;
+  placa: string;
+  marca: string;
+  modelo: string;
+  anio: number;
+  color: string | null;
+  tipo_vehiculo: string | null;
+  transmision: string | null;
+  tarifa_diaria: number;
+  accesorios: string[] | null;
+}
+
+interface AvailableClient {
+  id: string;
+  nombre: string;
+  documento: string;
+  correo: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  ciudad: string | null;
 }
 
 interface ContratoFormProps {
@@ -82,6 +119,8 @@ interface ContratoFormProps {
   formData: FormData;
   onChange: (name: string, value: unknown) => void;
   onVehiculosChange: (vehiculos: Vehiculo[]) => void;
+  availableVehicles: AvailableVehicle[];
+  availableClients: AvailableClient[];
 }
 
 export function ContratoForm({
@@ -89,6 +128,8 @@ export function ContratoForm({
   formData,
   onChange,
   onVehiculosChange,
+  availableVehicles,
+  availableClients,
 }: ContratoFormProps) {
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
@@ -100,7 +141,7 @@ export function ContratoForm({
   const addVehicle = () => {
     onVehiculosChange([
       ...formData.vehiculos,
-      { id: Date.now(), name: "", model: "", days: 1, price: 0 },
+      { id: Date.now(), name: "", model: "", days: 1, price: 0, color: "" },
     ]);
   };
 
@@ -109,17 +150,72 @@ export function ContratoForm({
   };
 
   const handleVehicleChange = (id: number, field: string, value: string | number) => {
+    onVehiculosChange(formData.vehiculos.map((v) => (v.id === id ? { ...v, [field]: value } : v)));
+  };
+
+  const handleSelectVehicle = (vehicleId: string) => {
+    const v = availableVehicles.find((v) => v.id === vehicleId);
+    if (!v) return;
+
+    onChange("vehiculo", `${v.marca} ${v.modelo}`);
+    onChange("modelo", `${v.modelo} ${v.anio}`);
+    onChange("tipoVehiculo", getInspectionVehicleType(v.tipo_vehiculo));
+    const trans = v.transmision?.toLowerCase() || "";
+    if (trans === "manual") onChange("transmision", "Manual");
+    else if (trans === "automatica") onChange("transmision", "Automática");
+    else onChange("transmision", "");
+    onChange("placa", v.placa);
+    onChange("detalles", v.color || "");
+    onChange("color", v.color || "");
+    onChange("precio", v.tarifa_diaria);
+    if (v.accesorios) {
+      onChange("accesorios", accesoriosFromArray(v.accesorios));
+    }
+  };
+
+  const handleSelectClient = (clientId: string) => {
+    const c = availableClients.find((c) => c.id === clientId);
+    if (!c) return;
+
+    onChange("cliente", c.nombre);
+    onChange("ruc", c.documento);
+    onChange("correo", c.correo || "");
+    onChange("telefono", c.telefono || "");
+    onChange("direccion", c.direccion || "");
+    if (c.ciudad) {
+      onChange("ciudad", c.ciudad);
+    }
+  };
+
+  const handleSelectProformaVehicle = (id: number, vehicleId: string) => {
+    const v = availableVehicles.find((v) => v.id === vehicleId);
+    if (!v) return;
     onVehiculosChange(
-      formData.vehiculos.map((v) => (v.id === id ? { ...v, [field]: value } : v)),
+      formData.vehiculos.map((veh) =>
+        veh.id === id
+          ? {
+              ...veh,
+              name: `${v.marca} ${v.modelo}`,
+              model: `${v.modelo} ${v.anio}`,
+              price: v.tarifa_diaria,
+              color: v.color || "",
+            }
+          : veh,
+      ),
     );
   };
 
   const isProforma = docType === "proforma";
+  const isConceptos = docType === "factura" && formData.facturaModo === "conceptos";
+  const conceptos = formData.conceptosFactura ?? [];
+  const monedaConceptos = formData.monedaConceptos ?? "USD";
 
   let subtotal = 0;
-  if (isProforma) {
+  if (isConceptos) {
+    subtotal = calcularTotalConceptos(conceptos);
+  } else if (isProforma) {
     subtotal = formData.vehiculos.reduce(
-      (acc, v) => acc + (parseFloat(String(v.days || 0)) * parseFloat(String(v.price || 0))),
+      (acc, v) => acc + parseFloat(String(v.days || 0)) * parseFloat(String(v.price || 0)),
       0,
     );
   } else {
@@ -127,17 +223,53 @@ export function ContratoForm({
   }
 
   let extraCost = 0;
-  if (formData.hasOtrosServicios) {
-    extraCost += (parseFloat(String(formData.choferDias)) || 0) * (parseFloat(String(formData.choferPrecio)) || 0);
-    extraCost += (parseFloat(String(formData.viaticosDias)) || 0) * (parseFloat(String(formData.viaticosPrecio)) || 0);
-    extraCost += (parseFloat(String(formData.hospedajeDias)) || 0) * (parseFloat(String(formData.hospedajePrecio)) || 0);
+  if (!isConceptos && formData.hasOtrosServicios) {
+    extraCost +=
+      (parseFloat(String(formData.choferDias)) || 0) *
+      (parseFloat(String(formData.choferPrecio)) || 0);
+    extraCost +=
+      (parseFloat(String(formData.viaticosDias)) || 0) *
+      (parseFloat(String(formData.viaticosPrecio)) || 0);
+    extraCost +=
+      (parseFloat(String(formData.hospedajeDias)) || 0) *
+      (parseFloat(String(formData.hospedajePrecio)) || 0);
   }
 
-  const totalUSD = subtotal + (parseFloat(String(formData.deposito)) || 0) + extraCost;
-  const totalNIO = totalUSD * (parseFloat(String(formData.tasa)) || 0);
+  const tasa = parseFloat(String(formData.tasa)) || 0;
+  const totalUSD = isConceptos && monedaConceptos === "NIO"
+    ? (tasa > 0 ? subtotal / tasa : 0)
+    : subtotal + (isConceptos ? 0 : (parseFloat(String(formData.deposito)) || 0) + extraCost);
+  const totalNIO = isConceptos && monedaConceptos === "NIO" ? subtotal : totalUSD * tasa;
 
   return (
-    <div className="bg-card rounded-xl border border-border p-6 space-y-8">
+    <div className="bg-card rounded-xl border border-border p-4 sm:p-6 space-y-8">
+      {docType === "factura" && (
+        <section>
+          <label htmlFor="factura-modo" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Tipo de factura</label>
+          <select
+            id="factura-modo"
+            value={formData.facturaModo ?? "renta"}
+            onChange={(e) => {
+              onChange("facturaModo", e.target.value);
+              if (e.target.value === "conceptos" && conceptos.length === 0) onChange("conceptosFactura", [nuevoConceptoFactura()]);
+            }}
+            className="w-full bg-muted/50 border border-input text-foreground rounded-lg px-3 py-2.5 text-sm"
+          >
+            <option value="renta">Renta de vehículo</option>
+            <option value="conceptos">Factura por conceptos</option>
+          </select>
+          {isConceptos && (
+            <div className="mt-3 space-y-1.5">
+              <label htmlFor="moneda-conceptos" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">Moneda de los conceptos</label>
+              <select id="moneda-conceptos" value={monedaConceptos} onChange={(e) => onChange("monedaConceptos", e.target.value)} className="w-full bg-muted/50 border border-input text-foreground rounded-lg px-3 py-2.5 text-sm">
+                <option value="USD">Dólares (USD)</option>
+                <option value="NIO">Córdobas (C$)</option>
+              </select>
+              <p className="text-xs text-muted-foreground">Los precios se ingresan en la moneda seleccionada. Cambiarla no convierte los importes escritos.</p>
+            </div>
+          )}
+        </section>
+      )}
       {/* Datos del Documento */}
       <section>
         <h2 className="flex items-center gap-2 text-sm font-bold text-primary border-b-2 border-gold pb-2 mb-4 uppercase tracking-wide">
@@ -156,6 +288,35 @@ export function ContratoForm({
               className="w-full bg-muted/50 border border-input text-foreground rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs"
             />
           </div>
+          {!isConceptos && <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+              N.º de Expediente
+            </label>
+            <input
+              type="text"
+              name="docNum"
+              value={formData.docNum}
+              onChange={handleChange}
+              className="w-full bg-muted/50 border border-input text-foreground rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs"
+              placeholder="0012"
+            />
+          </div>}
+          {isProforma && (
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Validez de la Proforma (Días)
+              </label>
+              <input
+                type="number"
+                name="validezDias"
+                value={formData.validezDias ?? 10}
+                onChange={handleChange}
+                min="1"
+                className="w-full bg-muted/50 border border-input text-foreground rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs"
+                placeholder="10"
+              />
+            </div>
+          )}
           {docType === "factura" && (
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
@@ -195,6 +356,24 @@ export function ContratoForm({
           <User className="size-4" /> Datos del Cliente
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {availableClients && availableClients.length > 0 && (
+            <div className="sm:col-span-2 bg-muted/30 p-3 rounded-lg border border-border/60 mb-2">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Buscar / Seleccionar Cliente del Sistema (opcional)
+              </label>
+              <Combobox
+                options={availableClients.map((c) => ({
+                  value: c.id,
+                  label: `${c.nombre} (${c.documento})`,
+                }))}
+                value={availableClients.find((c) => c.nombre === formData.cliente)?.id}
+                onSelect={handleSelectClient}
+                placeholder="— Seleccionar cliente existente —"
+                searchPlaceholder="Buscar por nombre o documento..."
+                emptyText="No se encontró cliente"
+              />
+            </div>
+          )}
           <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
               Nombre Completo *
@@ -247,21 +426,19 @@ export function ContratoForm({
               placeholder="+505 8888-0000"
             />
           </div>
-          {!isProforma && (
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                Dirección
-              </label>
-              <input
-                type="text"
-                name="direccion"
-                value={formData.direccion}
-                onChange={handleChange}
-                className="w-full bg-muted/50 border border-input text-foreground rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs"
-                placeholder="Dirección del cliente"
-              />
-            </div>
-          )}
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+              Dirección
+            </label>
+            <input
+              type="text"
+              name="direccion"
+              value={formData.direccion}
+              onChange={handleChange}
+              className="w-full bg-muted/50 border border-input text-foreground rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs"
+              placeholder="Dirección del cliente"
+            />
+          </div>
         </div>
 
         {docType === "contrato" && (
@@ -296,13 +473,8 @@ export function ContratoForm({
           </h2>
           <div className="space-y-3">
             {formData.vehiculos.map((v, index) => (
-              <div
-                key={v.id}
-                className="bg-muted/50 border border-border rounded-xl p-4 relative"
-              >
-                <h4 className="text-xs font-bold text-gold mb-3">
-                  Vehículo {index + 1}
-                </h4>
+              <div key={v.id} className="bg-muted/50 border border-border rounded-xl p-4 relative">
+                <h4 className="text-xs font-bold text-gold mb-3">Vehículo {index + 1}</h4>
                 {formData.vehiculos.length > 1 && (
                   <button
                     onClick={() => removeVehicle(v.id)}
@@ -310,6 +482,24 @@ export function ContratoForm({
                   >
                     <X className="size-4" />
                   </button>
+                )}
+                {availableVehicles && availableVehicles.length > 0 && (
+                  <div className="sm:col-span-2 bg-muted/30 p-3 rounded-lg border border-border/60 mb-3">
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                      Buscar / Seleccionar Vehículo del Sistema (opcional)
+                    </label>
+                    <Combobox
+                      options={availableVehicles.map((av) => ({
+                        value: av.id,
+                        label: `${av.codigo} · ${av.placa} — ${av.marca} ${av.modelo} (${av.anio})`,
+                      }))}
+                      value={availableVehicles.find((av) => `${av.marca} ${av.modelo}` === v.name)?.id}
+                      onSelect={(vehicleId) => handleSelectProformaVehicle(v.id, vehicleId)}
+                      placeholder="— Seleccionar vehículo existente —"
+                      searchPlaceholder="Buscar vehículo..."
+                      emptyText="No se encontró vehículo"
+                    />
+                  </div>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div className="sm:col-span-2 lg:col-span-1">
@@ -375,12 +565,30 @@ export function ContratoForm({
       )}
 
       {/* Vehículo Único (NO PROFORMA) */}
-      {!isProforma && (
+      {!isProforma && !isConceptos && (
         <section>
           <h2 className="flex items-center gap-2 text-sm font-bold text-primary border-b-2 border-gold pb-2 mb-4 uppercase tracking-wide">
             <Car className="size-4" /> Datos del Vehículo
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {availableVehicles && availableVehicles.length > 0 && (
+              <div className="sm:col-span-2 bg-muted/30 p-3 rounded-lg border border-border/60 mb-2">
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Buscar / Seleccionar Vehículo del Sistema (opcional)
+                </label>
+                <Combobox
+                  options={availableVehicles.map((v) => ({
+                    value: v.id,
+                    label: `${v.codigo} · ${v.placa} — ${v.marca} ${v.modelo} (${v.anio})`,
+                  }))}
+                  value={availableVehicles.find((av) => `${av.marca} ${av.modelo}` === formData.vehiculo)?.id}
+                  onSelect={handleSelectVehicle}
+                  placeholder="— Seleccionar vehículo existente —"
+                  searchPlaceholder="Buscar vehículo..."
+                  emptyText="No se encontró vehículo"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                 Vehículo
@@ -417,9 +625,9 @@ export function ContratoForm({
                 onChange={handleChange}
                 className="w-full bg-muted/50 border border-input text-foreground rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs"
               >
-                <option value="SUV">SUV</option>
-                <option value="Pickup">Pickup</option>
-                <option value="Sedán">Sedán</option>
+                {INSPECTION_VEHICLE_TYPES.map((tipo) => (
+                  <option key={tipo} value={tipo}>{tipo}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -469,7 +677,7 @@ export function ContratoForm({
       )}
 
       {/* Reserva (NO PROFORMA) */}
-      {!isProforma && (
+      {!isProforma && !isConceptos && (
         <section>
           <h2 className="flex items-center gap-2 text-sm font-bold text-primary border-b-2 border-gold pb-2 mb-4 uppercase tracking-wide">
             <MapPin className="size-4" /> Detalles de la Reserva
@@ -592,29 +800,14 @@ export function ContratoForm({
                 Accesorios Incluidos
               </h3>
               <div className="grid grid-cols-2 gap-2">
-                {([
-                  { key: "circulacion", label: "Circulación" },
-                  { key: "seguro", label: "Seguro" },
-                  { key: "llave", label: "Llave principal" },
-                  { key: "radio", label: "Radio / Multimedia" },
-                  { key: "camara", label: "Cámara de retroceso" },
-                  { key: "bocina", label: "Bocina de retroceso" },
-                  { key: "antivuelco", label: "Antivuelco" },
-                  { key: "baca", label: "Baca" },
-                  { key: "alogenos", label: "Par de alógenos" },
-                  { key: "traba", label: "Traba tuercas" },
-                  { key: "herramientas", label: "Herramientas básicas" },
-                  { key: "gata", label: "Gata hidráulica" },
-                  { key: "repuesto", label: "Llanta de repuesto" },
-                  { key: "triangulos", label: "Triángulos de seguridad" },
-                ] as const).map(({ key, label }) => (
+                {ALL_ACCESORIOS.map(({ key, label }) => (
                   <label
                     key={key}
                     className="flex items-center gap-2 text-sm text-foreground cursor-pointer"
                   >
                     <input
                       type="checkbox"
-                      checked={!!(formData.accesorios && formData.accesorios[key as keyof Accesorios])}
+                      checked={!!(formData.accesorios && formData.accesorios[key])}
                       onChange={(e) => {
                         onChange("accesorios", {
                           ...formData.accesorios,
@@ -633,12 +826,13 @@ export function ContratoForm({
       )}
 
       {/* Montos */}
+      {isConceptos && <ConceptosFacturaForm conceptos={conceptos} moneda={monedaConceptos} onChange={(items) => onChange("conceptosFactura", items)} />}
       <section>
         <h2 className="flex items-center gap-2 text-sm font-bold text-primary border-b-2 border-gold pb-2 mb-4 uppercase tracking-wide">
           <DollarSign className="size-4" /> Resumen de Montos
         </h2>
 
-        {!isProforma && (
+        {!isProforma && !isConceptos && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 bg-muted/50 p-4 rounded-xl border border-border">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
@@ -678,19 +872,35 @@ export function ContratoForm({
           </div>
         )}
 
-        <div className="mb-4">
-          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-            Depósito / Anticipo (USD)
-          </label>
-          <input
-            type="number"
-            name="deposito"
-            value={formData.deposito}
-            onChange={handleChange}
-            className="w-full bg-muted/50 border border-input text-foreground rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs max-w-[200px]"
-            step="0.01"
-            min="0"
-          />
+        {!isConceptos && <>
+        <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+              Depósito / Anticipo (USD)
+            </label>
+            <input
+              type="number"
+              name="deposito"
+              value={formData.deposito}
+              onChange={handleChange}
+              className="w-full bg-muted/50 border border-input text-foreground rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs"
+              step="0.01"
+              min="0"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+              Nombre de Depósito personalizado (opcional)
+            </label>
+            <input
+              type="text"
+              name="depositoLabel"
+              value={formData.depositoLabel || ""}
+              placeholder="Depósito en Garantía"
+              onChange={handleChange}
+              className="w-full bg-muted/50 border border-input text-foreground rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs"
+            />
+          </div>
         </div>
 
         <div className="mb-4">
@@ -718,7 +928,7 @@ export function ContratoForm({
                 <h4 className="text-xs font-bold text-foreground uppercase mb-2">
                   Servicio de Chofer
                 </h4>
-                <div className="flex gap-2">
+                <div className="flex gap-2 mb-2">
                   <div className="w-1/2">
                     <label className="text-[10px] text-muted-foreground font-bold uppercase">
                       Días
@@ -747,14 +957,25 @@ export function ContratoForm({
                     />
                   </div>
                 </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground font-bold uppercase">
+                    Nombre personalizado (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    name="choferLabel"
+                    value={formData.choferLabel || ""}
+                    placeholder="Servicio de Chofer"
+                    onChange={handleChange}
+                    className="w-full bg-background border border-input text-foreground rounded-lg px-2 py-1 text-xs outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs mt-1"
+                  />
+                </div>
               </div>
 
               {/* Viáticos */}
               <div className="bg-card p-3 rounded-lg border border-border shadow-xs">
-                <h4 className="text-xs font-bold text-foreground uppercase mb-2">
-                  Viáticos
-                </h4>
-                <div className="flex gap-2">
+                <h4 className="text-xs font-bold text-foreground uppercase mb-2">Viáticos</h4>
+                <div className="flex gap-2 mb-2">
                   <div className="w-1/2">
                     <label className="text-[10px] text-muted-foreground font-bold uppercase">
                       Días
@@ -783,14 +1004,25 @@ export function ContratoForm({
                     />
                   </div>
                 </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground font-bold uppercase">
+                    Nombre personalizado (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    name="viaticosLabel"
+                    value={formData.viaticosLabel || ""}
+                    placeholder="Viáticos"
+                    onChange={handleChange}
+                    className="w-full bg-background border border-input text-foreground rounded-lg px-2 py-1 text-xs outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs mt-1"
+                  />
+                </div>
               </div>
 
               {/* Hospedaje */}
               <div className="bg-card p-3 rounded-lg border border-border shadow-xs">
-                <h4 className="text-xs font-bold text-foreground uppercase mb-2">
-                  Hospedaje
-                </h4>
-                <div className="flex gap-2">
+                <h4 className="text-xs font-bold text-foreground uppercase mb-2">Hospedaje</h4>
+                <div className="flex gap-2 mb-2">
                   <div className="w-1/2">
                     <label className="text-[10px] text-muted-foreground font-bold uppercase">
                       Días
@@ -819,20 +1051,32 @@ export function ContratoForm({
                     />
                   </div>
                 </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground font-bold uppercase">
+                    Nombre personalizado (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    name="hospedajeLabel"
+                    value={formData.hospedajeLabel || ""}
+                    placeholder="Hospedaje"
+                    onChange={handleChange}
+                    className="w-full bg-background border border-input text-foreground rounded-lg px-2 py-1 text-xs outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs mt-1"
+                  />
+                </div>
               </div>
             </div>
           </div>
         )}
 
+        </>}
         {/* Totales */}
         <div className="mt-4 p-5 bg-primary text-primary-foreground rounded-xl shadow-inner flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="text-center sm:text-left w-full sm:w-auto">
             <p className="text-xs text-primary-foreground/70 font-bold uppercase tracking-wider mb-1">
               Total a Pagar
             </p>
-            <p className="text-3xl font-extrabold text-gold">
-              ${totalUSD.toFixed(2)}
-            </p>
+            <p className="text-3xl font-extrabold text-gold">{isConceptos && monedaConceptos === "NIO" ? `C$${totalNIO.toFixed(2)}` : `$${totalUSD.toFixed(2)}`}</p>
           </div>
 
           {!isProforma && (
@@ -850,9 +1094,7 @@ export function ContratoForm({
                   step="0.01"
                 />
               </div>
-              <p className="text-xl font-bold text-right">
-                C${totalNIO.toFixed(2)}
-              </p>
+              <p className="text-xl font-bold text-right">{isConceptos && monedaConceptos === "NIO" ? `$${totalUSD.toFixed(2)} USD` : `C$${totalNIO.toFixed(2)}`}</p>
             </div>
           )}
         </div>
@@ -895,7 +1137,7 @@ export function ContratoForm({
         </div>
         {isProforma && (
           <p className="text-xs text-muted-foreground italic mt-2 flex items-center gap-1">
-            <Info className="size-3" /> La proforma incluirá automáticamente la validez de 10 días.
+            <Info className="size-3" /> La proforma incluirá: "Proforma válida por {formData.validezDias ?? 10} días a partir de la fecha emitida."
           </p>
         )}
       </section>

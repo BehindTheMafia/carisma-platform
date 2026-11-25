@@ -18,21 +18,52 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { ImageUpload } from "@/components/image-upload";
 
-export type FieldType = "text" | "number" | "date" | "datetime" | "select" | "textarea" | "checkbox" | "email" | "tel";
+export type FieldType =
+  | "text"
+  | "number"
+  | "date"
+  | "datetime"
+  | "select"
+  | "textarea"
+  | "checkbox"
+  | "email"
+  | "tel"
+  | "images";
 
 export interface OptionsQuery {
   table: string;
@@ -40,6 +71,7 @@ export interface OptionsQuery {
   labelKey: string | ((row: Record<string, unknown>) => string);
   select?: string;
   orderBy?: string;
+  excludeDeleted?: boolean;
 }
 
 export interface FieldDef {
@@ -54,6 +86,7 @@ export interface FieldDef {
   defaultValue?: unknown;
   span?: 1 | 2;
   helpText?: string;
+  bucket?: string;
 }
 
 export interface ColumnDef<Row = Record<string, unknown>> {
@@ -78,11 +111,14 @@ export interface CrudConfig<Row = Record<string, unknown>> {
   rowKey?: (row: Row) => string;
   toolbar?: ReactNode;
   emptyMessage?: string;
-  defaultValues?: Record<string, unknown>;
+  defaultValues?: Record<string, unknown> | (() => Record<string, unknown>);
   allowCreate?: boolean;
   allowEdit?: boolean;
   allowDelete?: boolean;
   pageSize?: number;
+  renderCard?: (row: Row, actions: { onEdit: () => void; onDelete: () => void }) => ReactNode;
+  monthFilter?: { column: string; label?: string };
+  headerExtra?: ReactNode;
 }
 
 function useOptions(field: FieldDef) {
@@ -91,22 +127,45 @@ function useOptions(field: FieldDef) {
     enabled: !!field.optionsQuery,
     queryFn: async () => {
       const q = field.optionsQuery!;
-      const { data, error } = await sb
+      let query = sb
         .from(q.table)
-        .select(q.select ?? `${q.valueKey}, ${typeof q.labelKey === "string" ? q.labelKey : "*"}`)
-        .order(q.orderBy ?? (typeof q.labelKey === "string" ? q.labelKey : q.valueKey));
+        .select(q.select ?? `${q.valueKey}, ${typeof q.labelKey === "string" ? q.labelKey : "*"}`);
+      if (q.excludeDeleted) {
+        query = query.is("deleted_at", null);
+      }
+      query = query.order(q.orderBy ?? (typeof q.labelKey === "string" ? q.labelKey : q.valueKey));
+      const { data, error } = await query;
       if (error) throw error as Error;
       return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
         value: String(r[q.valueKey]),
-        label: typeof q.labelKey === "function" ? q.labelKey(r) : String(r[q.labelKey] ?? r[q.valueKey]),
+        label:
+          typeof q.labelKey === "function" ? q.labelKey(r) : String(r[q.labelKey] ?? r[q.valueKey]),
       }));
     },
   });
 }
 
-function FieldControl({ field, value, onChange }: { field: FieldDef; value: unknown; onChange: (v: unknown) => void }) {
+function FieldControl({
+  field,
+  value,
+  onChange,
+}: {
+  field: FieldDef;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
   const optsQ = useOptions(field);
   const options = field.options ?? optsQ.data ?? [];
+
+  if (field.type === "images") {
+    return (
+      <ImageUpload
+        value={(Array.isArray(value) ? value : []) as any}
+        onChange={(v) => onChange(v)}
+        bucket={field.bucket}
+      />
+    );
+  }
 
   if (field.type === "textarea") {
     return (
@@ -129,22 +188,48 @@ function FieldControl({ field, value, onChange }: { field: FieldDef; value: unkn
     return (
       <Select value={(value as string) ?? ""} onValueChange={(v) => onChange(v)}>
         <SelectTrigger>
-          <SelectValue placeholder={field.placeholder ?? "Seleccionar..."} />
+          <SelectValue
+            placeholder={
+              optsQ.isLoading
+                ? "Cargando..."
+                : options.length === 0
+                  ? "Sin opciones disponibles"
+                  : field.placeholder ?? "Seleccionar..."
+            }
+          />
         </SelectTrigger>
         <SelectContent>
-          {options.map((o) => (
-            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-          ))}
+          {optsQ.isLoading ? (
+            <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" /> Cargando...
+            </div>
+          ) : options.length === 0 ? (
+            <div className="py-2 text-center text-sm text-muted-foreground">
+              Sin opciones disponibles
+            </div>
+          ) : (
+            options.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))
+          )}
         </SelectContent>
       </Select>
     );
   }
   const inputType =
-    field.type === "number" ? "number" :
-    field.type === "date" ? "date" :
-    field.type === "datetime" ? "datetime-local" :
-    field.type === "email" ? "email" :
-    field.type === "tel" ? "tel" : "text";
+    field.type === "number"
+      ? "number"
+      : field.type === "date"
+        ? "date"
+        : field.type === "datetime"
+          ? "datetime-local"
+          : field.type === "email"
+            ? "email"
+            : field.type === "tel"
+              ? "tel"
+              : "text";
   return (
     <Input
       type={inputType}
@@ -161,7 +246,11 @@ function FieldControl({ field, value, onChange }: { field: FieldDef; value: unkn
 }
 
 function CrudForm<Row extends Record<string, unknown>>({
-  config, initial, onCancel, onSubmit, submitting,
+  config,
+  initial,
+  onCancel,
+  onSubmit,
+  submitting,
 }: {
   config: CrudConfig<Row>;
   initial: Record<string, unknown> | null;
@@ -171,6 +260,8 @@ function CrudForm<Row extends Record<string, unknown>>({
 }) {
   const defaults = useMemo(() => {
     const base: Record<string, unknown> = {};
+    const dv =
+      typeof config.defaultValues === "function" ? config.defaultValues() : config.defaultValues;
     for (const f of config.fields) {
       const v = initial?.[f.name];
       if (v !== undefined && v !== null) {
@@ -178,7 +269,8 @@ function CrudForm<Row extends Record<string, unknown>>({
         else if (f.type === "date" && typeof v === "string") base[f.name] = v.slice(0, 10);
         else base[f.name] = v;
       } else if (f.defaultValue !== undefined) base[f.name] = f.defaultValue;
-      else if (config.defaultValues?.[f.name] !== undefined) base[f.name] = config.defaultValues[f.name];
+      else if (dv?.[f.name] !== undefined) base[f.name] = dv[f.name];
+      else if (f.type === "images") base[f.name] = [];
       else base[f.name] = f.type === "checkbox" ? false : "";
     }
     return base;
@@ -208,7 +300,8 @@ function CrudForm<Row extends Record<string, unknown>>({
         {config.fields.map((f) => (
           <div key={f.name} className={f.span === 2 ? "md:col-span-2" : ""}>
             <Label className="mb-1.5 block text-xs font-medium">
-              {f.label}{f.required ? <span className="text-destructive"> *</span> : null}
+              {f.label}
+              {f.required ? <span className="text-destructive"> *</span> : null}
             </Label>
             <FieldControl
               field={f}
@@ -220,7 +313,9 @@ function CrudForm<Row extends Record<string, unknown>>({
         ))}
       </div>
       <DialogFooter className="gap-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>Cancelar</Button>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+          Cancelar
+        </Button>
         <Button type="submit" disabled={submitting}>
           {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
           Guardar
@@ -230,7 +325,11 @@ function CrudForm<Row extends Record<string, unknown>>({
   );
 }
 
-export function CrudPage<Row extends Record<string, unknown>>({ config }: { config: CrudConfig<Row> }) {
+export function CrudPage<Row extends Record<string, unknown>>({
+  config,
+}: {
+  config: CrudConfig<Row>;
+}) {
   const queryClient = useQueryClient();
   const pk = config.primaryKey ?? "id";
   const softDelete = config.softDelete ?? true;
@@ -243,27 +342,37 @@ export function CrudPage<Row extends Record<string, unknown>>({ config }: { conf
   const [page, setPage] = useState(0);
   const [editing, setEditing] = useState<Row | null | undefined>(undefined); // undefined=closed, null=new
   const [confirmDelete, setConfirmDelete] = useState<Row | null>(null);
+  const [monthFilter, setMonthFilter] = useState(() => {
+    if (!config.monthFilter) return "";
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
 
-  const queryKey = [config.table, "list", search, page];
+  const queryKey = [config.table, "list", search, page, monthFilter];
 
   const listQ = useQuery({
     queryKey,
     queryFn: async () => {
-      let q = sb
-        .from(config.table)
-        .select(config.select ?? "*", { count: "exact" });
+      let q = sb.from(config.table).select(config.select ?? "*", { count: "exact" });
       if (softDelete) q = q.is("deleted_at", null);
       if (search && config.searchFields?.length) {
         const term = `%${search}%`;
         const or = config.searchFields.map((f) => `${f}.ilike.${term}`).join(",");
         q = q.or(or);
       }
-      if (config.orderBy) q = q.order(config.orderBy.column, { ascending: config.orderBy.ascending ?? false });
+      if (config.monthFilter && monthFilter) {
+        const [y, m] = monthFilter.split("-").map(Number);
+        const start = new Date(y, m - 1, 1).toISOString();
+        const end = new Date(y, m, 1).toISOString();
+        q = q.gte(config.monthFilter.column, start).lt(config.monthFilter.column, end);
+      }
+      if (config.orderBy)
+        q = q.order(config.orderBy.column, { ascending: config.orderBy.ascending ?? false });
       else q = q.order("created_at", { ascending: false });
       q = q.range(page * pageSize, page * pageSize + pageSize - 1);
       const { data, error, count } = await q;
       if (error) throw error as Error;
-      return { rows: ((data ?? []) as unknown) as Row[], count: count ?? 0 };
+      return { rows: (data ?? []) as unknown as Row[], count: count ?? 0 };
     },
   });
 
@@ -271,7 +380,10 @@ export function CrudPage<Row extends Record<string, unknown>>({ config }: { conf
     mutationFn: async (values: Record<string, unknown>) => {
       if (editing && (editing as Record<string, unknown>)[pk]) {
         const id = (editing as Record<string, unknown>)[pk];
-        const { error } = await sb.from(config.table).update(values).eq(pk, id as string);
+        const { error } = await sb
+          .from(config.table)
+          .update(values)
+          .eq(pk, id as string);
         if (error) throw error as Error;
       } else {
         const { error } = await sb.from(config.table).insert(values);
@@ -281,7 +393,7 @@ export function CrudPage<Row extends Record<string, unknown>>({ config }: { conf
     onSuccess: () => {
       toast.success(editing ? "Registro actualizado" : "Registro creado");
       setEditing(undefined);
-      queryClient.invalidateQueries({ queryKey: [config.table] });
+      queryClient.invalidateQueries();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -290,7 +402,10 @@ export function CrudPage<Row extends Record<string, unknown>>({ config }: { conf
     mutationFn: async (row: Row) => {
       const id = (row as Record<string, unknown>)[pk] as string;
       if (softDelete) {
-        const { error } = await sb.from(config.table).update({ deleted_at: new Date().toISOString() }).eq(pk, id);
+        const { error } = await sb
+          .from(config.table)
+          .update({ deleted_at: new Date().toISOString() })
+          .eq(pk, id);
         if (error) throw error as Error;
       } else {
         const { error } = await sb.from(config.table).delete().eq(pk, id);
@@ -300,7 +415,7 @@ export function CrudPage<Row extends Record<string, unknown>>({ config }: { conf
     onSuccess: () => {
       toast.success("Eliminado");
       setConfirmDelete(null);
-      queryClient.invalidateQueries({ queryKey: [config.table] });
+      queryClient.invalidateQueries();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -310,13 +425,19 @@ export function CrudPage<Row extends Record<string, unknown>>({ config }: { conf
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            {config.icon}{config.title}
-          </h1>
-          {config.description ? <p className="mt-1 text-sm text-muted-foreground">{config.description}</p> : null}
+        <div className="flex items-center gap-4 min-w-0">
+          {config.headerExtra}
+          <div className="min-w-0">
+            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+              {config.icon}
+              {config.title}
+            </h1>
+            {config.description ? (
+              <p className="mt-1 text-sm text-muted-foreground">{config.description}</p>
+            ) : null}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {config.toolbar}
           <Button variant="outline" size="icon" onClick={() => listQ.refetch()} title="Refrescar">
             <RotateCcw className="size-4" />
@@ -330,83 +451,181 @@ export function CrudPage<Row extends Record<string, unknown>>({ config }: { conf
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative max-w-sm flex-1">
+        <div className="relative w-full min-w-0 sm:max-w-sm sm:flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Buscar..."
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
             className="pl-9"
           />
         </div>
+        {config.monthFilter ? (
+          <Input
+            type="month"
+            value={monthFilter}
+            onChange={(e) => {
+              setMonthFilter(e.target.value);
+              setPage(0);
+            }}
+            className="w-full sm:w-44"
+          />
+        ) : null}
         <div className="ml-auto text-xs text-muted-foreground">
           {listQ.data?.count ?? 0} registros
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
-              {config.columns.map((c) => (
-                <TableHead key={c.key} className={c.className}>{c.label}</TableHead>
-              ))}
-              {(allowEdit || allowDelete) ? <TableHead className="w-24 text-right">Acciones</TableHead> : null}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {listQ.isLoading ? (
-              <TableRow><TableCell colSpan={config.columns.length + 1} className="h-24 text-center">
-                <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
-              </TableCell></TableRow>
-            ) : (listQ.data?.rows.length ?? 0) === 0 ? (
-              <TableRow><TableCell colSpan={config.columns.length + 1} className="h-24 text-center text-sm text-muted-foreground">
-                {config.emptyMessage ?? "Sin resultados."}
-              </TableCell></TableRow>
-            ) : (
-              listQ.data!.rows.map((row, i) => (
-                <TableRow key={config.rowKey ? config.rowKey(row) : String((row as Record<string, unknown>)[pk] ?? i)}>
-                  {config.columns.map((c) => (
-                    <TableCell key={c.key} className={c.className}>
-                      {c.render ? c.render(row) : String((row as Record<string, unknown>)[c.key] ?? "—")}
-                    </TableCell>
+      {config.renderCard ? (
+        (() => {
+          const renderCard = config.renderCard!;
+          return (
+            <div>
+              {listQ.isLoading ? (
+                <div className="flex h-48 items-center justify-center">
+                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (listQ.data?.rows.length ?? 0) === 0 ? (
+                <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
+                  {config.emptyMessage ?? "Sin resultados."}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {listQ.data!.rows.map((row, i) => (
+                    <div
+                      key={
+                        config.rowKey
+                          ? config.rowKey(row)
+                          : String((row as Record<string, unknown>)[pk] ?? i)
+                      }
+                    >
+                      {renderCard(row, {
+                        onEdit: () => setEditing(row),
+                        onDelete: () => setConfirmDelete(row),
+                      })}
+                    </div>
                   ))}
-                  {(allowEdit || allowDelete) ? (
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        {allowEdit ? (
-                          <Button variant="ghost" size="icon" onClick={() => setEditing(row)}>
-                            <Pencil className="size-4" />
-                          </Button>
-                        ) : null}
-                        {allowDelete ? (
-                          <Button variant="ghost" size="icon" onClick={() => setConfirmDelete(row)}>
-                            <Trash2 className="size-4 text-destructive" />
-                          </Button>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                  ) : null}
+                </div>
+              )}
+            </div>
+          );
+        })()
+      ) : (
+        <div className="overflow-hidden rounded-lg border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                {config.columns.map((c) => (
+                  <TableHead key={c.key} className={c.className}>
+                    {c.label}
+                  </TableHead>
+                ))}
+                {allowEdit || allowDelete ? (
+                  <TableHead className="w-24 text-right">Acciones</TableHead>
+                ) : null}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {listQ.isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={config.columns.length + 1} className="h-24 text-center">
+                    <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
+                  </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ) : (listQ.data?.rows.length ?? 0) === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={config.columns.length + 1}
+                    className="h-24 text-center text-sm text-muted-foreground"
+                  >
+                    {config.emptyMessage ?? "Sin resultados."}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                listQ.data!.rows.map((row, i) => (
+                  <TableRow
+                    key={
+                      config.rowKey
+                        ? config.rowKey(row)
+                        : String((row as Record<string, unknown>)[pk] ?? i)
+                    }
+                  >
+                    {config.columns.map((c) => (
+                      <TableCell key={c.key} className={c.className}>
+                        {c.render
+                          ? c.render(row)
+                          : String((row as Record<string, unknown>)[c.key] ?? "—")}
+                      </TableCell>
+                    ))}
+                    {allowEdit || allowDelete ? (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          {allowEdit ? (
+                            <Button variant="ghost" size="icon" onClick={() => setEditing(row)}>
+                              <Pencil className="size-4" />
+                            </Button>
+                          ) : null}
+                          {allowDelete ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setConfirmDelete(row)}
+                            >
+                              <Trash2 className="size-4 text-destructive" />
+                            </Button>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                    ) : null}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       {totalPages > 1 ? (
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>Anterior</Button>
-          <span className="text-xs text-muted-foreground">Página {page + 1} de {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>Siguiente</Button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === 0}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+          >
+            Anterior
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Página {page + 1} de {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page + 1 >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Siguiente
+          </Button>
         </div>
       ) : null}
 
-      <Dialog open={editing !== undefined} onOpenChange={(o) => { if (!o) setEditing(undefined); }}>
-        <DialogContent className="max-w-2xl">
+      <Dialog
+        open={editing !== undefined}
+        onOpenChange={(o) => {
+          if (!o) setEditing(undefined);
+        }}
+      >
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing ? `Editar ${config.title}` : `Nuevo ${config.title}`}</DialogTitle>
-            {config.description ? <DialogDescription>{config.description}</DialogDescription> : null}
+            <DialogTitle>
+              {editing ? `Editar ${config.title}` : `Nuevo ${config.title}`}
+            </DialogTitle>
+            {config.description ? (
+              <DialogDescription>{config.description}</DialogDescription>
+            ) : null}
           </DialogHeader>
           {editing !== undefined ? (
             <CrudForm
@@ -420,12 +639,18 @@ export function CrudPage<Row extends Record<string, unknown>>({ config }: { conf
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
+      <AlertDialog
+        open={!!confirmDelete}
+        onOpenChange={(o) => {
+          if (!o) setConfirmDelete(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar registro?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción {softDelete ? "marcará el registro como eliminado" : "es permanente"}. ¿Deseas continuar?
+              Esta acción {softDelete ? "marcará el registro como eliminado" : "es permanente"}.
+              ¿Deseas continuar?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
