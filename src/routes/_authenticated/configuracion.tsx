@@ -23,6 +23,7 @@ type Config = {
   direccion: string | null;
   moneda_principal: "NIO" | "USD";
   impuesto_porcentaje: number;
+  tipo_cambio: number;
   terminos_contrato: string | null;
   logo_url: string | null;
 };
@@ -40,7 +41,7 @@ function Page() {
         .limit(1)
         .maybeSingle();
       if (error) throw error;
-      return (data ?? { nombre: "TM RENT A CAR", moneda_principal: "NIO", impuesto_porcentaje: 15 }) as Config;
+      return (data ?? { nombre: "TM RENT A CAR", moneda_principal: "NIO", impuesto_porcentaje: 15, tipo_cambio: 36.5 }) as Config;
     },
   });
 
@@ -84,7 +85,7 @@ function Page() {
               <Label className="mb-1.5 block text-xs">Nombre</Label>
               <Input value={form.nombre} onChange={(e) => set("nombre", e.target.value)} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="mb-1.5 block text-xs">RUC</Label>
                 <Input value={form.ruc ?? ""} onChange={(e) => set("ruc", e.target.value)} />
@@ -94,7 +95,7 @@ function Page() {
                 <Input value={form.telefono ?? ""} onChange={(e) => set("telefono", e.target.value)} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="mb-1.5 block text-xs">Correo</Label>
                 <Input type="email" value={form.correo ?? ""} onChange={(e) => set("correo", e.target.value)} />
@@ -121,7 +122,7 @@ function Page() {
             <CardDescription>Moneda principal, impuestos y términos legales.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="mb-1.5 block text-xs">Moneda principal</Label>
                 <Select value={form.moneda_principal} onValueChange={(v) => set("moneda_principal", v as "NIO" | "USD")}>
@@ -133,12 +134,19 @@ function Page() {
                 </Select>
               </div>
               <div>
-                <Label className="mb-1.5 block text-xs">Impuesto %</Label>
+                <Label className="mb-1.5 block text-xs">Tipo de cambio (1 USD = ? NIO)</Label>
                 <Input
-                  type="number" step="0.01" value={form.impuesto_porcentaje}
-                  onChange={(e) => set("impuesto_porcentaje", Number(e.target.value))}
+                  type="number" step="0.01" min="0.01" value={form.tipo_cambio}
+                  onChange={(e) => set("tipo_cambio", Number(e.target.value))}
                 />
               </div>
+            </div>
+            <div>
+              <Label className="mb-1.5 block text-xs">Impuesto %</Label>
+              <Input
+                type="number" step="0.01" value={form.impuesto_porcentaje}
+                onChange={(e) => set("impuesto_porcentaje", Number(e.target.value))}
+              />
             </div>
             <div>
               <Label className="mb-1.5 block text-xs">Términos del contrato</Label>
