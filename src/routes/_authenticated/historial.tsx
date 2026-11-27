@@ -6,7 +6,7 @@ import { generatePDF } from "@/utils/pdfGenerator";
 import { generateNotaDebitoPDF } from "@/utils/pdfGeneratorNotaDebito";
 import { getNotaDebitoCalibrationOffsets } from "@/utils/calibrationNotaDebitoStorage";
 import {
-  History, Search, Download, Trash2, Printer, Pencil, X,
+  History, Search, Download, Trash2, Printer, Pencil, X, CreditCard,
   Link2, Unlink, Car,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { type NotaDebitoFormData, type NotaDebitoEstado } from "@/types/notas-debito";
+import { FacturaConceptosPayments } from "@/components/contratos/FacturaConceptosPayments";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 type ContratoRow = {
@@ -111,6 +112,7 @@ function Page() {
 
   // Estado del modal de vinculación
   const [linkModalDoc, setLinkModalDoc] = useState<ContratoRow | null>(null);
+  const [payModalDoc, setPayModalDoc] = useState<ContratoRow | null>(null);
   const [rentaSearch, setRentaSearch] = useState("");
 
   // ── Query: historial ──────────────────────────────────────────────────────
@@ -124,6 +126,7 @@ function Page() {
             "id, numero, fecha, cliente_id, renta_id, descripcion_general, subtotal, iva, total, estado, cliente:clientes(nombre, documento)",
             { count: "exact" },
           )
+          .is("deleted_at", null)
           .order("created_at", { ascending: false });
 
         if (search) q = q.ilike("numero", `%${search}%`);
@@ -199,7 +202,7 @@ function Page() {
       toast.success("Documento eliminado");
       setConfirmDelete(null);
     },
-    onError: () => toast.error("No se pudo eliminar"),
+    onError: (error: Error) => toast.error(error.message.includes("foreign key") ? "No se puede eliminar una factura con pagos registrados. Anulá primero sus pagos." : "No se pudo eliminar el documento"),
   });
 
   const vincularM = useMutation({
@@ -471,6 +474,9 @@ function Page() {
                             >
                               <Printer className="size-4" />
                             </Button>
+                            {esConceptos && <Button variant="ghost" size="icon" className="size-8 text-emerald-600"
+                              title="Registrar y consultar pagos" aria-label={`Registrar pagos de factura ${numeroVisible}`}
+                              onClick={() => setPayModalDoc(c)}><CreditCard className="size-4" /></Button>}
                             {!esConceptos && (
                               <Button
                                 variant="ghost"
@@ -698,6 +704,15 @@ function Page() {
             className="flex-1 w-full bg-muted/50"
             title="Vista previa para imprimir"
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* AlertDialog: confirmar eliminación */}
+      <Dialog open={!!payModalDoc} onOpenChange={(open) => { if (!open) setPayModalDoc(null); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Ingresos de factura por conceptos</DialogTitle></DialogHeader>
+          {payModalDoc?.form_data && <FacturaConceptosPayments id={payModalDoc.id}
+            numero={String(payModalDoc.form_data.facturaNum ?? payModalDoc.numero)} formData={payModalDoc.form_data} />}
         </DialogContent>
       </Dialog>
 

@@ -113,6 +113,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import { formatDate, formatCurrency } from "@/lib/format";
 import { ESTADO_FINANCIERO_COLORS, ESTADO_FINANCIERO_LABELS } from "@/lib/constants";
+import { CedulaFotos } from "@/components/clientes/CedulaFotos";
 
 type Cliente = {
   id: string;
@@ -346,7 +347,7 @@ function useCustomersData() {
         : { data: [], error: null };
       if (payments.error) throw payments.error;
       const pendingByRental = new Map<string, number>();
-      for (const payment of payments.data ?? []) pendingByRental.set(payment.renta_id, (pendingByRental.get(payment.renta_id) ?? 0) + 1);
+      for (const payment of payments.data ?? []) if (payment.renta_id) pendingByRental.set(payment.renta_id, (pendingByRental.get(payment.renta_id) ?? 0) + 1);
 
       const byCustomer = new Map<string, CustomerStats>();
       for (const renta of rentas ?? []) {
@@ -993,6 +994,8 @@ function CustomerProfileDrawer({
                     </div>
                   </CardContent>
                 </Card>
+
+                <CedulaFotos clienteId={customer.id} />
 
                 <Card className="rounded-xl border-border/60 shadow-none">
                   <CardHeader className="pb-2 pt-4 px-4">

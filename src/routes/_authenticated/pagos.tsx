@@ -1,17 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { CreditCard, Wallet, ArrowLeftRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CrudPage, type CrudConfig } from "@/components/crud-page";
 import { formatCurrency, formatDate, formatDateTime, type Moneda } from "@/lib/format";
 import { EGRESO_CATEGORIA_LABELS, EGRESO_CATEGORIA_COLORS } from "@/lib/constants";
+import { supabase } from "@/integrations/supabase/client";
 
 /* ─── Types ─── */
 
 type Pago = {
   id: string;
-  renta_id: string;
+  renta_id: string | null;
+  contrato_id: string | null;
+  nota_debito_id: string | null;
   fecha: string;
   monto: number;
   moneda: Moneda;
@@ -19,6 +23,8 @@ type Pago = {
   estado: string;
   referencia: string | null;
   rentas?: { folio: string; numero_oficial?: string | null; clientes?: { nombre: string } };
+  contratos?: { form_data: { facturaNum?: string; cliente?: string; facturaModo?: string } } | null;
+  notas_debito?: { numero: string; cliente?: { nombre: string } | null } | null;
 };
 
 type Egreso = {
@@ -54,6 +60,13 @@ const EGRESO_CATEGORIA_OPTIONS = Object.entries(EGRESO_CATEGORIA_LABELS).map(([v
 
 function PagosPage() {
   const [view, setView] = useState<"pagos" | "egresos">("pagos");
+  const { data: notePaymentsReady = false } = useQuery({
+    queryKey: ["nota-debito-payments-schema"],
+    queryFn: async () => {
+      const { error } = await supabase.from("pagos").select("nota_debito_id").limit(0);
+      return !error;
+    },
+  });
   const toggleView = () => setView((v) => (v === "pagos" ? "egresos" : "pagos"));
 
   const toggleBtn = (
@@ -67,10 +80,14 @@ function PagosPage() {
     title: "Pagos",
     description: "Cobros y abonos recibidos. Las garantías son reembolsables y no forman parte de los ingresos.",
     table: "pagos",
-    select: "*, rentas(folio, numero_oficial, clientes(nombre))",
+    select: notePaymentsReady
+      ? "*, rentas(folio, numero_oficial, clientes(nombre)), contratos(form_data), notas_debito(numero, cliente:clientes(nombre))"
+      : "*, rentas(folio, numero_oficial, clientes(nombre)), contratos(form_data)",
     searchFields: ["referencia"],
     monthFilter: { column: "fecha" },
     toolbar: view === "pagos" ? toggleBtn : undefined,
+    canEdit: (r) => !!r.renta_id,
+    canDelete: (r) => !!r.renta_id,
     columns: [
       { key: "fecha", label: "Fecha", render: (r) => formatDateTime(r.fecha) },
       {
@@ -78,11 +95,11 @@ function PagosPage() {
         label: "Factura",
         render: (r) => (
           <span className="font-mono text-xs">
-            {r.rentas?.numero_oficial ?? "Sin emitir"}
+            {r.notas_debito?.numero ?? r.contratos?.form_data?.facturaNum ?? r.rentas?.numero_oficial ?? "Sin emitir"}
           </span>
         ),
       },
-      { key: "cliente", label: "Cliente", render: (r) => r.rentas?.clientes?.nombre ?? "—" },
+      { key: "cliente", label: "Cliente", render: (r) => r.notas_debito?.cliente?.nombre ?? r.contratos?.form_data?.cliente ?? r.rentas?.clientes?.nombre ?? "—" },
       { key: "monto", label: "Monto", render: (r) => formatCurrency(r.monto, r.moneda) },
       {
         key: "metodo",
@@ -253,7 +270,7 @@ function PagosPage() {
   };
 
   return view === "pagos" ? (
-    <CrudPage config={configPagos} key="pagos" />
+    <CrudPage config={configPagos} key={notePaymentsReady ? "pagos-notes" : "pagos"} />
   ) : (
     <CrudPage config={configEgresos} key="egresos" />
   );

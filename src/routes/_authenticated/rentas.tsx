@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { FileText, Plus, Pencil, Trash2, Search, RotateCcw, Loader2 } from "lucide-react";
+import { FileText, Plus, Pencil, Trash2, Search, RotateCcw, Loader2, ArrowDown, ArrowUp } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -53,7 +53,7 @@ export const Route = createFileRoute("/_authenticated/rentas")({
   component: RentasPage,
 });
 
-type SortField = "folio" | "fecha_inicio" | "fecha_devolucion" | "total";
+type SortField = "created_at" | "folio" | "fecha_inicio" | "fecha_devolucion" | "total";
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZE = 25;
@@ -67,13 +67,13 @@ function RentasPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [monthFilter, setMonthFilter] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Managua", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+    return `${parts.find((p) => p.type === "year")?.value}-${parts.find((p) => p.type === "month")?.value}`;
   });
   const [selectedRentaId, setSelectedRentaId] = useState<string | null>(pagarRentaId ?? null);
   const [pagosTab, setPagosTab] = useState(!!pagarRentaId);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [sortField, setSortField] = useState<SortField>("fecha_inicio");
+  const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [showCreate, setShowCreate] = useState(!!clienteId);
   const [editRentaId, setEditRentaId] = useState<string | null>(null);
@@ -86,19 +86,25 @@ function RentasPage() {
       const term = search.trim();
       const searchPattern = escapePostgrestPattern(term);
       let matchingClienteIds: string[] = [];
+      let matchingVehiculoIds: string[] = [];
+      let matchingRentaIds: string[] = [];
 
       if (term) {
-        const { data: clientesData, error: clientesError } = await supabase
-          .from("clientes")
-          .select("id")
-          .is("deleted_at", null)
-          .or(
-            `nombre.ilike.%${searchPattern}%,documento.ilike.%${searchPattern}%,telefono.ilike.%${searchPattern}%,whatsapp.ilike.%${searchPattern}%`,
-          )
-          .limit(100);
-
-        if (clientesError) throw clientesError;
+        const [clientesResult, vehiculosResult, facturasResult] = await Promise.all([
+          supabase.from("clientes").select("id").is("deleted_at", null)
+            .or(`nombre.ilike.%${searchPattern}%,documento.ilike.%${searchPattern}%,telefono.ilike.%${searchPattern}%,whatsapp.ilike.%${searchPattern}%`).limit(200),
+          supabase.from("vehiculos").select("id").is("deleted_at", null)
+            .or(`codigo.ilike.%${searchPattern}%,placa.ilike.%${searchPattern}%,marca.ilike.%${searchPattern}%,modelo.ilike.%${searchPattern}%`).limit(200),
+          supabase.from("contratos").select("renta_id").eq("tipo", "factura").not("renta_id", "is", null)
+            .or(`numero.ilike.%${searchPattern}%,form_data->>facturaNum.ilike.%${searchPattern}%`).limit(200),
+        ]);
+        for (const result of [clientesResult, vehiculosResult, facturasResult]) {
+          if (result.error) throw result.error;
+        }
+        const clientesData = clientesResult.data;
         matchingClienteIds = (clientesData ?? []).map((cliente) => cliente.id);
+        matchingVehiculoIds = (vehiculosResult.data ?? []).map((vehiculo) => vehiculo.id);
+        matchingRentaIds = (facturasResult.data ?? []).flatMap((factura) => factura.renta_id ? [factura.renta_id] : []);
       }
 
       let q = supabase
@@ -115,18 +121,20 @@ function RentasPage() {
         if (matchingClienteIds.length > 0) {
           rentFilters.push(`cliente_id.in.(${matchingClienteIds.join(",")})`);
         }
+        if (matchingVehiculoIds.length > 0) rentFilters.push(`vehiculo_id.in.(${matchingVehiculoIds.join(",")})`);
+        if (matchingRentaIds.length > 0) rentFilters.push(`id.in.(${matchingRentaIds.join(",")})`);
 
         q = q.or(rentFilters.join(","));
       }
       if (monthFilter) {
         const [y, m] = monthFilter.split("-").map(Number);
-        const start = new Date(y, m - 1, 1).toISOString();
-        const end = new Date(y, m, 1).toISOString();
-        q = q.gte("fecha_devolucion", start).lt("fecha_devolucion", end);
+        const start = new Date(Date.UTC(y, m - 1, 1, 6)).toISOString();
+        const end = new Date(Date.UTC(y, m, 1, 6)).toISOString();
+        q = q.gte("created_at", start).lt("created_at", end);
       }
 
-      const orderCol = sortField === "folio" ? "folio" : sortField === "fecha_inicio" ? "fecha_inicio" : sortField === "fecha_devolucion" ? "fecha_devolucion" : "total";
-      q = q.order(orderCol, { ascending: sortDir === "asc" });
+      q = q.order(sortField, { ascending: sortDir === "asc" })
+        .order("id", { ascending: sortDir === "asc" });
 
       q = q.range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
 
@@ -154,12 +162,19 @@ function RentasPage() {
   const totalPages = Math.max(1, Math.ceil((listQ.data?.count ?? 0) / PAGE_SIZE));
 
   const toggleSort = (field: SortField) => {
+    setPage(0);
     if (sortField === field) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortField(field);
       setSortDir("desc");
     }
+  };
+
+  const showByAge = (direction: SortDir) => {
+    setSortField("created_at");
+    setSortDir(direction);
+    setPage(0);
   };
 
   const rowCounts = (listQ.data?.rows ?? []).reduce(
@@ -236,7 +251,7 @@ function RentasPage() {
         <div className="relative w-full min-w-0 sm:max-w-sm sm:flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por folio o cliente..."
+            placeholder="Buscar cliente, factura, folio o vehículo..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -245,18 +260,34 @@ function RentasPage() {
             className="pl-9"
           />
         </div>
-        <Input
-          type="month"
-          value={monthFilter}
-          onChange={(e) => {
-            setMonthFilter(e.target.value);
-            setPage(0);
-          }}
-          className="w-full sm:w-44"
-        />
+        <label className="flex w-full flex-col gap-1 text-xs text-muted-foreground sm:w-44">
+          Mes de registro
+          <Input
+            type="month"
+            value={monthFilter}
+            onChange={(e) => {
+              setMonthFilter(e.target.value);
+              setPage(0);
+            }}
+            className="w-full"
+          />
+        </label>
         <div className="ml-auto text-xs text-muted-foreground">
           {listQ.data?.count ?? 0} registros
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2.5">
+        <span className="mr-1 text-sm font-medium">Ver rentas:</span>
+        <Button type="button" size="sm" variant={sortField === "created_at" && sortDir === "desc" ? "default" : "outline"}
+          aria-pressed={sortField === "created_at" && sortDir === "desc"} onClick={() => showByAge("desc")}>
+          <ArrowDown className="mr-1.5 size-4" /> Más recientes
+        </Button>
+        <Button type="button" size="sm" variant={sortField === "created_at" && sortDir === "asc" ? "default" : "outline"}
+          aria-pressed={sortField === "created_at" && sortDir === "asc"} onClick={() => showByAge("asc")}>
+          <ArrowUp className="mr-1.5 size-4" /> Más antiguas
+        </Button>
+        <span className="text-xs text-muted-foreground">Por fecha de registro dentro del mes seleccionado</span>
       </div>
 
       <div className="overflow-hidden rounded-lg border bg-card">

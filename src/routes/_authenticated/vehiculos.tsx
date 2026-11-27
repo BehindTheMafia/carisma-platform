@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { VEHICLE_TYPE_OPTIONS, getVehicleTypeLabel } from "@/lib/vehicle-types";
+import { VEHICLE_TYPE_OPTIONS, TRUCK_TONNAGE_OPTIONS, getTruckStorageType, getTruckTonnage, getVehicleTypeLabel } from "@/lib/vehicle-types";
 import { motion } from "framer-motion";
 import {
   Car,
@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   Camera,
   Loader2,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -48,6 +50,10 @@ import {
 } from "@/components/ui/dialog";
 import { formatCurrency, type Moneda } from "@/lib/format";
 import { ALL_ACCESORIOS } from "@/constants/accesorios";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const GOLD = "#C89B3C";
 const BLUE = "#2563EB";
@@ -281,6 +287,15 @@ const FORM_FIELDS: Array<{
     span: 1,
   },
   {
+    name: "toneladas",
+    label: "Capacidad de carga",
+    type: "select",
+    options: TRUCK_TONNAGE_OPTIONS,
+    required: true,
+    span: 1,
+    showWhen: (v) => v.tipo_vehiculo === "camion",
+  },
+  {
     name: "clasificacion",
     label: "Clasificación",
     type: "select",
@@ -430,6 +445,11 @@ function VehicleForm({
       else if (f.type === "images") base[f.name] = [];
       else base[f.name] = "";
     }
+    const truckTonnage = getTruckTonnage(initial?.tipo_vehiculo as string | null);
+    if (truckTonnage) {
+      base.tipo_vehiculo = "camion";
+      base.toneladas = String(truckTonnage);
+    }
     return base;
   }, [initial]);
 
@@ -439,12 +459,13 @@ function VehicleForm({
 
   const visibleFields = useMemo(
     () => FORM_FIELDS.filter((f) => !f.showWhen || f.showWhen(watchedValues)),
-    [watchedValues.clasificacion],
+    [watchedValues.clasificacion, watchedValues.tipo_vehiculo],
   );
 
   function submit(v: FieldValues) {
     const out: Record<string, unknown> = {};
     for (const f of FORM_FIELDS) {
+      if (f.name === "toneladas") continue;
       let val = v[f.name];
       if (val === "" || val === undefined) val = null;
       if (f.required && !f.name.startsWith("tarifa_") && (val === null || val === "")) {
@@ -452,6 +473,14 @@ function VehicleForm({
         return;
       }
       out[f.name] = val;
+    }
+    if (v.tipo_vehiculo === "camion") {
+      const truckType = getTruckStorageType(v.toneladas as string);
+      if (!truckType) {
+        toast.error("Seleccioná la capacidad del camión: 2, 3, 5 u 8 toneladas.");
+        return;
+      }
+      out.tipo_vehiculo = truckType;
     }
 
     if (isSubrentado) {
@@ -594,6 +623,7 @@ function Page() {
   const [sortBy, setSortBy] = useState("newest");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [editing, setEditing] = useState<Vehiculo | null | undefined>(undefined);
+  const [confirmDelete, setConfirmDelete] = useState<Vehiculo | null>(null);
 
   const vehiclesQ = useQuery({
     queryKey: ["vehiculos-fleet", search, statusFilter, sortBy],
@@ -666,6 +696,28 @@ function Page() {
       queryClient.invalidateQueries({ queryKey: ["vehiculos-fleet"] });
     },
     onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteM = useMutation({
+    mutationFn: async (id: string) => {
+      const { data: active, error: lookupError } = await supabase.from("rentas")
+        .select("id").eq("vehiculo_id", id).in("estado", ["activa", "reservada"])
+        .is("deleted_at", null).limit(1);
+      if (lookupError) throw lookupError;
+      if (active?.length) throw new Error("El vehículo tiene una renta activa o reservada. Cerrá esa renta antes de eliminarlo.");
+      const { error } = await supabase.from("vehiculos")
+        .update({ deleted_at: new Date().toISOString() }).eq("id", id).is("deleted_at", null)
+        .select("id").single();
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setConfirmDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["vehiculos-fleet"] });
+      queryClient.invalidateQueries({ queryKey: ["options"] });
+      queryClient.invalidateQueries({ queryKey: ["reportes-summary-v2"] });
+      toast.success("Vehículo eliminado de la flota; sus rentas anteriores se conservan.");
+    },
+    onError: (error: Error) => toast.error(error.message),
   });
 
   const vehicles = useMemo(() => vehiclesQ.data ?? [], [vehiclesQ.data]);
@@ -985,6 +1037,10 @@ function Page() {
                       </span>
                     )}
                   </div>
+                  <div className="flex justify-end gap-2 border-t pt-3" onClick={(e) => e.stopPropagation()}>
+                    <Button variant="outline" size="sm" onClick={() => setEditing(v)}><Pencil className="mr-1 size-3.5" /> Editar</Button>
+                    <Button variant="outline" size="sm" className="text-destructive" onClick={() => setConfirmDelete(v)}><Trash2 className="mr-1 size-3.5" /> Eliminar</Button>
+                  </div>
                 </div>
               </motion.div>
             );
@@ -1024,6 +1080,7 @@ function Page() {
                 <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-[#6B7280] dark:text-[#9CA3AF]">
                   Combustible
                 </th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-[#6B7280] dark:text-[#9CA3AF]">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -1085,6 +1142,12 @@ function Page() {
                     <td className="px-4 py-3 text-xs text-[#6B7280] dark:text-[#9CA3AF] capitalize">
                       {v.combustible ?? "—"}
                     </td>
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" title="Editar vehículo" onClick={() => setEditing(v)}><Pencil className="size-4" /></Button>
+                        <Button variant="ghost" size="icon" title="Eliminar vehículo" className="text-destructive" onClick={() => setConfirmDelete(v)}><Trash2 className="size-4" /></Button>
+                      </div>
+                    </td>
                   </motion.tr>
                 );
               })}
@@ -1121,6 +1184,18 @@ function Page() {
           )}
         </DialogContent>
       </Dialog>
+      <AlertDialog open={!!confirmDelete} onOpenChange={(open) => { if (!open) setConfirmDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar {confirmDelete?.marca} {confirmDelete?.modelo}?</AlertDialogTitle>
+            <AlertDialogDescription>El vehículo dejará de aparecer en la flota. Las rentas y documentos anteriores se conservarán.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={deleteM.isPending} className="bg-destructive text-destructive-foreground" onClick={() => confirmDelete && deleteM.mutate(confirmDelete.id)}>Eliminar vehículo</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

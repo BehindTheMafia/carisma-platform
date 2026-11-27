@@ -405,10 +405,11 @@ function Page() {
       const [pagosResult, egresosResult, pendientesResult] = await Promise.all([
         // Include vehicle classification + subrental cost data via renta → vehiculo JOIN
         // mirrors exactly what RentaDetailTabPayments fetches
-        supabase
-          .from("pagos")
-          .select(`
-            id, fecha, monto, moneda, metodo, estado, referencia, renta_id,
+        (async () => {
+          const full = await supabase.from("pagos").select(`
+            id, fecha, monto, moneda, metodo, estado, referencia, renta_id, contrato_id, nota_debito_id,
+            contratos(form_data),
+            notas_debito(numero, cliente:clientes(nombre)),
             rentas(
               id, numero_oficial, estado, deleted_at, deposito, moneda, tarifa_subarriendo,
               vehiculo_id,
@@ -417,9 +418,16 @@ function Page() {
               vehiculos(clasificacion, marca, modelo, placa, costo_subarriendo),
               clientes(nombre)
             )
-          `)
-          .is("deleted_at", null)
-          .eq("estado", "pagado"),
+          `).is("deleted_at", null).eq("estado", "pagado");
+          if (!full.error || !["42703", "PGRST200"].includes(full.error.code)) return full;
+          const legacy = await supabase.from("pagos").select(`
+            id, fecha, monto, moneda, metodo, estado, referencia, renta_id, contrato_id,
+            contratos(form_data),
+            rentas(id, numero_oficial, estado, deleted_at, deposito, moneda, tarifa_subarriendo,
+              vehiculo_id, dias, total, vehiculos(clasificacion, marca, modelo, placa, costo_subarriendo), clientes(nombre))
+          `).is("deleted_at", null).eq("estado", "pagado");
+          return { data: (legacy.data ?? []).map(p => ({ ...p, nota_debito_id: null, notas_debito: null })), error: legacy.error };
+        })(),
         supabase
           .from("egresos")
           .select("id, fecha, monto, moneda, metodo, concepto, categoria, responsable, descripcion, renta_id, rentas(numero_oficial, clientes(nombre))")
@@ -479,6 +487,26 @@ function Page() {
           utilidadSubrenta: p.esSubrenta ? p.ingreso - costoPago : undefined,
         };
       });
+      for (const p of pagos.filter(p => p.contrato_id && p.contratos && enPeriodo(p.fecha, dateFrom, dateTo))) {
+        ingresos.push({
+          id: `ingreso-${p.id}`, fecha: p.fecha, tipo: "ingreso", categoria: "factura_conceptos",
+          descripcion: `Abono de factura por conceptos · ${p.metodo}`,
+          referencia: p.referencia ?? "", cliente: p.contratos.form_data?.cliente ?? "—",
+          factura: p.contratos.form_data?.facturaNum ?? "—", metodo: p.metodo,
+          moneda: p.moneda, monto: Number(p.monto), estado: p.estado,
+          rawId: p.id, rawRecord: p,
+        });
+      }
+      for (const p of pagos.filter(p => p.nota_debito_id && p.notas_debito && enPeriodo(p.fecha, dateFrom, dateTo))) {
+        ingresos.push({
+          id: `ingreso-${p.id}`, fecha: p.fecha, tipo: "ingreso", categoria: "nota_debito",
+          descripcion: `Abono de nota de débito · ${p.metodo}`,
+          referencia: p.referencia ?? "", cliente: p.notas_debito.cliente?.nombre ?? "—",
+          factura: p.notas_debito.numero, metodo: p.metodo,
+          moneda: p.moneda, monto: Number(p.monto), estado: p.estado,
+          rawId: p.id, rawRecord: p,
+        });
+      }
 
       const egresos: MovementRow[] = (egresosResult.data ?? []).filter(e => enPeriodo(e.fecha, dateFrom, dateTo)).map((e: any) => {
         const isSubarriendo = e.categoria === "subarriendo";
