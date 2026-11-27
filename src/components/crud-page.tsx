@@ -115,6 +115,8 @@ export interface CrudConfig<Row = Record<string, unknown>> {
   allowCreate?: boolean;
   allowEdit?: boolean;
   allowDelete?: boolean;
+  canEdit?: (row: Row) => boolean;
+  canDelete?: (row: Row) => boolean;
   pageSize?: number;
   renderCard?: (row: Row, actions: { onEdit: () => void; onDelete: () => void }) => ReactNode;
   monthFilter?: { column: string; label?: string };
@@ -563,12 +565,12 @@ export function CrudPage<Row extends Record<string, unknown>>({
                     {allowEdit || allowDelete ? (
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          {allowEdit ? (
+                          {allowEdit && (config.canEdit?.(row) ?? true) ? (
                             <Button variant="ghost" size="icon" onClick={() => setEditing(row)}>
                               <Pencil className="size-4" />
                             </Button>
                           ) : null}
-                          {allowDelete ? (
+                          {allowDelete && (config.canDelete?.(row) ?? true) ? (
                             <Button
                               variant="ghost"
                               size="icon"

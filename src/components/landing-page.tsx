@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { INSPECTION_VEHICLE_TYPES, getVehicleTypeLabel } from "@/lib/vehicle-types";
+import { getVehicleCategory, getVehicleTypeLabel } from "@/lib/vehicle-types";
 import type { Tables } from "@/integrations/supabase/types";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -110,7 +110,7 @@ const faqs = [
   { q: "¿Ofrecen servicio de chofer?", a: "Sí, contamos con servicio de chofer profesional disponible por día. Consulta tarifas con nuestro equipo." },
 ];
 
-const categorias = ["Todas", ...INSPECTION_VEHICLE_TYPES, "Camioneta"];
+const categorias = ["Todas", "SUV", "Pickup", "Sedán", "Microbús", "Camión", "Camioneta"];
 const transmisiones = ["Todas", "Manual", "Automática"];
 const combustibles = ["Todos", "Gasolina", "Diesel", "Híbrido", "Eléctrico"];
 
@@ -120,6 +120,7 @@ function getCategoryIcon(cat: string) {
     case "SUV": return Compass;
     case "Sedán": return CarFront;
     case "Pickup": return Truck;
+    case "Camión": return Truck;
     case "Microbús": return Bus;
     case "Camioneta": return Layers;
     default: return Car;
@@ -282,7 +283,7 @@ export function LandingPage() {
   const filteredVehicles = useMemo(() => {
     let result = [...availableVehicles];
     if (categoryFilter !== "Todas") {
-      result = result.filter((v) => getTipoVehiculoLabel(v.tipo_vehiculo) === categoryFilter);
+      result = result.filter((v) => getVehicleCategory(v.tipo_vehiculo) === categoryFilter);
     }
     if (transmissionFilter !== "Todas") {
       result = result.filter((v) => {
