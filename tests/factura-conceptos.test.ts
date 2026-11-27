@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calcularTotalConceptos, esFacturaPorConceptos, facturaConceptosSchema } from "../src/lib/factura-conceptos.ts";
+import { calcularTotalConceptos, esFacturaPorConceptos, facturaConceptosSchema, saldoFacturaConceptos } from "../src/lib/factura-conceptos.ts";
 
 const traslado = { id: "traslado", descripcion: "Traslado aeropuerto–hotel del 11 de octubre", cantidad: 1, precioUnitario: 35 };
 const factura = { cliente: "Cliente de prueba", tasa: 36.6243, conceptosFactura: [traslado] };
@@ -44,4 +44,12 @@ test("una factura por conceptos acepta córdobas y conserva compatibilidad con f
   assert.equal(facturaConceptosSchema.safeParse({ ...factura, monedaConceptos: "USD" }).success, true);
   assert.equal(facturaConceptosSchema.safeParse({ ...factura, monedaConceptos: "EUR" }).success, false);
   assert.equal(facturaConceptosSchema.safeParse(factura).success, true);
+});
+
+test("los abonos parciales en dos monedas usan la tasa de la factura sin cobrar la garantía de rentas", () => {
+  const tasa = 36.6243;
+  assert.deepEqual(saldoFacturaConceptos(30, "USD", tasa, [
+    { monto: 10, moneda: "USD" }, { monto: 366.24, moneda: "NIO" },
+  ]).saldo, 10);
+  assert.equal(saldoFacturaConceptos(30, "USD", tasa, [{ monto: 1098.73, moneda: "NIO" }]).saldo, 0);
 });
