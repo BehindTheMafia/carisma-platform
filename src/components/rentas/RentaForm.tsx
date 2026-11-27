@@ -15,7 +15,8 @@ import { logRentaEvent } from "@/lib/renta-log";
 import { formatCurrency, type Moneda } from "@/lib/format";
 
 type ClienteOption = { id: string; nombre: string; documento: string };
-type VehiculoOption = { id: string; codigo: string; placa: string; marca: string; modelo: string; tarifa_diaria: number; clasificacion: string; costo_subarriendo: number };
+type VehiculoOption = { id: string; codigo: string; placa: string; marca: string; modelo: string; estado: string; tarifa_diaria: number; clasificacion: string; costo_subarriendo: number };
+type RentaOcupada = { id: string; folio: string; fecha_inicio: string; fecha_devolucion: string };
 
 export type RentaFormData = {
   cliente_id: string;
@@ -63,6 +64,8 @@ export function RentaForm({ open, onClose, onSuccess, defaultClienteId, rentaId 
   const prevVehiculoId = useRef("");
 
   const isEdit = !!rentaId;
+  const reservaVehiculo = form.estado === "reservada" || form.estado === "activa";
+  const fechasValidas = !!form.fecha_inicio && !!form.fecha_devolucion && form.fecha_devolucion > form.fecha_inicio;
 
   const toDateInput = (iso: string): string => {
     // Use UTC methods to avoid local timezone shifting the date
@@ -113,9 +116,9 @@ export function RentaForm({ open, onClose, onSuccess, defaultClienteId, rentaId 
     queryFn: async () => {
       const { data } = await supabase
         .from("vehiculos")
-        .select("id, codigo, placa, marca, modelo, tarifa_diaria, clasificacion, costo_subarriendo")
+        .select("id, codigo, placa, marca, modelo, estado, tarifa_diaria, clasificacion, costo_subarriendo")
         .is("deleted_at", null)
-        .in("estado", ["disponible", "reservado"])
+        .in("estado", ["disponible", "reservado", "rentado"])
         .order("marca");
       return (data ?? []) as VehiculoOption[];
     },
@@ -140,7 +143,7 @@ export function RentaForm({ open, onClose, onSuccess, defaultClienteId, rentaId 
     supabase
       .from("rentas")
       .select(
-        "cliente_id, vehiculo_id, fecha_inicio, fecha_devolucion, dias, tarifa, tarifa_subarriendo, moneda, deposito, descuento, estado, observaciones, vehiculos(tarifa_diaria, clasificacion, costo_subarriendo, codigo, placa, marca, modelo)",
+        "cliente_id, vehiculo_id, fecha_inicio, fecha_devolucion, dias, tarifa, tarifa_subarriendo, moneda, deposito, descuento, estado, observaciones, vehiculos(tarifa_diaria, clasificacion, costo_subarriendo, codigo, placa, marca, modelo, estado)",
       )
       .eq("id", rentaId)
       .single()
@@ -158,6 +161,7 @@ export function RentaForm({ open, onClose, onSuccess, defaultClienteId, rentaId 
           placa: string;
           marca: string;
           modelo: string;
+          estado: string;
         } | null;
         // Mark vehiculo as already processed so the vehicle-change effect
         // does NOT fire and overwrite the saved tarifa with the vehicle's
@@ -186,6 +190,7 @@ export function RentaForm({ open, onClose, onSuccess, defaultClienteId, rentaId 
             placa: v.placa,
             marca: v.marca,
             modelo: v.modelo,
+            estado: v.estado,
             tarifa_diaria: v.tarifa_diaria,
             clasificacion: v.clasificacion,
             costo_subarriendo: v.costo_subarriendo,
@@ -210,6 +215,27 @@ export function RentaForm({ open, onClose, onSuccess, defaultClienteId, rentaId 
     return vehiculos.some((v) => v.id === editVehiculo.id) ? vehiculos : [...vehiculos, editVehiculo];
   }, [vehiculos, editVehiculo]);
 
+  const disponibilidad = useQuery({
+    queryKey: ["disponibilidad-renta", form.vehiculo_id, form.fecha_inicio, form.fecha_devolucion, rentaId],
+    queryFn: async (): Promise<RentaOcupada | null> => {
+      let query = supabase.from("rentas")
+        .select("id, folio, fecha_inicio, fecha_devolucion")
+        .eq("vehiculo_id", form.vehiculo_id)
+        .is("deleted_at", null)
+        .in("estado", ["reservada", "activa"])
+        .lt("fecha_inicio", form.fecha_devolucion)
+        .gt("fecha_devolucion", form.fecha_inicio)
+        .limit(1);
+      if (rentaId) query = query.neq("id", rentaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data?.[0] as RentaOcupada | undefined) ?? null;
+    },
+    enabled: open && !!form.vehiculo_id && fechasValidas && reservaVehiculo,
+    retry: false,
+    staleTime: 0,
+  });
+
   useEffect(() => {
     if (!form.vehiculo_id || prevVehiculoId.current === form.vehiculo_id) return;
     prevVehiculoId.current = form.vehiculo_id;
@@ -231,6 +257,12 @@ export function RentaForm({ open, onClose, onSuccess, defaultClienteId, rentaId 
     if (!form.cliente_id) { toast.error("Seleccioná un cliente"); return; }
     if (!form.vehiculo_id) { toast.error("Seleccioná un vehículo"); return; }
     if (!form.fecha_inicio || !form.fecha_devolucion) { toast.error("Completá las fechas"); return; }
+    if (!fechasValidas) { toast.error("La devolución debe ser posterior al inicio"); return; }
+    if (reservaVehiculo) {
+      const { data: ocupada, error: disponibilidadError } = await disponibilidad.refetch();
+      if (disponibilidadError) { toast.error("No se pudo comprobar la disponibilidad. Intentá de nuevo."); return; }
+      if (ocupada) { toast.error(`El vehículo ya tiene la renta ${ocupada.folio} en esas fechas`); return; }
+    }
 
     const subtotal = form.dias * form.tarifa;
     // Depósito is a separate guarantee field, not added to the rental total
@@ -293,7 +325,7 @@ export function RentaForm({ open, onClose, onSuccess, defaultClienteId, rentaId 
 
   const vehiculoOptions = allVehiculos.map((v) => ({
     value: v.id,
-    label: `${v.marca} ${v.modelo} — ${v.placa} (C$ ${v.tarifa_diaria}/día)`,
+    label: `${v.marca} ${v.modelo} — ${v.placa} (${v.estado === "rentado" ? "rentado actualmente" : v.estado === "reservado" ? "reservado" : "disponible"})`,
   }));
 
   const selectedVehiculo = allVehiculos.find((v) => v.id === form.vehiculo_id);
@@ -329,6 +361,20 @@ export function RentaForm({ open, onClose, onSuccess, defaultClienteId, rentaId 
               searchPlaceholder="Buscar por marca, modelo o placa..."
               emptyText="Sin resultados"
             />
+            {selectedVehiculo?.estado === "rentado" && (
+              <p className="text-xs text-muted-foreground">Este vehículo está rentado ahora. Podés programar otra renta para fechas posteriores si no se cruzan.</p>
+            )}
+            {reservaVehiculo && form.vehiculo_id && fechasValidas && disponibilidad.isPending && (
+              <p className="text-xs text-muted-foreground" role="status">Comprobando disponibilidad...</p>
+            )}
+            {reservaVehiculo && form.vehiculo_id && fechasValidas && disponibilidad.isError && (
+              <p className="text-xs text-destructive" role="alert">No se pudo consultar la disponibilidad. Intentá de nuevo.</p>
+            )}
+            {reservaVehiculo && disponibilidad.data && (
+              <p className="text-xs text-destructive" role="alert">
+                No disponible: renta {disponibilidad.data.folio} del {toDateInput(disponibilidad.data.fecha_inicio)} al {toDateInput(disponibilidad.data.fecha_devolucion)}. Elegí otras fechas.
+              </p>
+            )}
             {isSubrentado && (
               <p className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1.5 text-xs">
                 Vehículo <span className="font-medium">subrentado</span> — Tarifa diaria:{" "}
@@ -468,7 +514,7 @@ export function RentaForm({ open, onClose, onSuccess, defaultClienteId, rentaId 
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={saving || loadingEdit}>
+          <Button onClick={handleSave} disabled={saving || loadingEdit || (reservaVehiculo && !!form.vehiculo_id && fechasValidas && (disponibilidad.isPending || disponibilidad.isError || !!disponibilidad.data))}>
             {(saving || loadingEdit) && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
             {isEdit ? "Guardar Cambios" : "Crear Renta"}
           </Button>
