@@ -276,7 +276,7 @@ export async function obtenerDatosReporteFinanciero(
 
   let pagosQuery = supabase
     .from("pagos")
-    .select("id, renta_id, monto, moneda, fecha, metodo, estado, referencia, deleted_at")
+    .select("id, renta_id, contrato_id, nota_debito_id, monto, moneda, fecha, metodo, estado, referencia, deleted_at, contratos(form_data), notas_debito(numero, estado, deleted_at, cliente:clientes(nombre))")
     .is("deleted_at", null)
     .eq("estado", "pagado");
 
@@ -286,27 +286,28 @@ export async function obtenerDatosReporteFinanciero(
     // El método se filtra después de distribuir todo el historial entre renta y garantía.
   }
 
-  const [rentasRes, pagosRes, egresosRes, notasDebitoRes] = await Promise.all([
+  const [rentasRes, pagosRes, egresosRes] = await Promise.all([
     rentasQuery,
-    pagosQuery,
+    (async () => {
+      const full = await pagosQuery;
+      if (!full.error || !["42703", "PGRST200"].includes(full.error.code)) return full;
+      const legacy = await supabase.from("pagos")
+        .select("id, renta_id, contrato_id, monto, moneda, fecha, metodo, estado, referencia, deleted_at, contratos(form_data)")
+        .is("deleted_at", null).eq("estado", "pagado");
+      return { data: (legacy.data ?? []).map(p => ({ ...p, nota_debito_id: null, notas_debito: null })), error: legacy.error };
+    })(),
     supabase
       .from("egresos")
       .select("id, renta_id, fecha, categoria, concepto, descripcion, monto, moneda, responsable, deleted_at")
       .is("deleted_at", null),
-    supabase
-      .from("notas_debito")
-      .select("id, total, moneda, fecha")
-      .eq("estado", "emitida")
-      .gte("fecha", start)
-      .lte("fecha", end),
   ]);
 
-  for (const result of [rentasRes, pagosRes, egresosRes, notasDebitoRes]) {
+  for (const result of [rentasRes, pagosRes, egresosRes]) {
     if (result.error) throw result.error;
   }
   const rawRentas = rentasRes.data ?? [];
   const rawEgresos = egresosRes.data ?? [];
-  const cobros = desglosarCobros(pagosRes.data ?? [], rawRentas, tipoCambio).filter(p =>
+  const cobros = desglosarCobros((pagosRes.data ?? []).filter((p): p is typeof p & { renta_id: string } => !!p.renta_id), rawRentas, tipoCambio).filter(p =>
     enPeriodo(p.fecha, start, end) &&
     (!filtros.metodoPago || filtros.metodoPago === "todos" || p.metodo === filtros.metodoPago) &&
     (!filtros.clienteSearch || (p.renta.clientes?.nombre ?? "").toLowerCase().includes(filtros.clienteSearch.toLowerCase())) &&
@@ -315,6 +316,13 @@ export async function obtenerDatosReporteFinanciero(
   const rentaMap = new Map(rawRentas.map(r => [r.id, r]));
   const proveedorRegistrado = new Set(rawEgresos.filter(e => e.categoria === "subarriendo" && e.renta_id).map(e => e.renta_id));
   const cv = (monto: number, moneda: string) => convertCurrency(Number(monto), moneda as Moneda, filtros.moneda, tipoCambio);
+  const ingresosConceptos = (pagosRes.data ?? []).filter(p =>
+    !!p.contrato_id && !!p.contratos && enPeriodo(p.fecha, start, end) &&
+    (!filtros.metodoPago || filtros.metodoPago === "todos" || p.metodo === filtros.metodoPago) &&
+    (!filtros.clienteSearch || String((p.contratos.form_data as Record<string, unknown> | null)?.cliente ?? "").toLowerCase().includes(filtros.clienteSearch.toLowerCase())) &&
+    (!filtros.vehiculoId || filtros.vehiculoId === "todos") &&
+    (!filtros.estadoContrato || filtros.estadoContrato === "todos")
+  ).reduce((sum, p) => sum + cv(p.monto, p.moneda), 0);
   let ingresosRentasPropias = 0;
   let ingresosRentasSubrentadas = 0;
   const subMap = new Map<string, SubarriendoDetalleItem>();
@@ -363,11 +371,19 @@ export async function obtenerDatosReporteFinanciero(
   const ingresosDetalle: IngresoDetalleItem[] = [
     { concepto: "Rentas de vehículos propios (sin garantías)", subtotal: ingresosRentasPropias },
   ];
+  if (ingresosConceptos) ingresosDetalle.push({ concepto: "Facturas por conceptos cobradas", subtotal: ingresosConceptos });
   if (filtros.tipoDocumento === "operativo_completo") {
     ingresosDetalle.push({ concepto: "Cobros por subrentas (sin garantías)", subtotal: ingresosRentasSubrentadas });
   }
-  const notasTotal = (notasDebitoRes.data ?? []).reduce((s, nd) => s + cv(nd.total, nd.moneda), 0);
-  if (notasTotal) ingresosDetalle.push({ concepto: "Notas de débito", subtotal: notasTotal });
+  const notasTotal = (pagosRes.data ?? []).filter(p =>
+    !!p.nota_debito_id && p.notas_debito?.estado === "emitida" && !p.notas_debito.deleted_at &&
+    enPeriodo(p.fecha, start, end) &&
+    (!filtros.metodoPago || filtros.metodoPago === "todos" || p.metodo === filtros.metodoPago) &&
+    (!filtros.clienteSearch || (p.notas_debito.cliente?.nombre ?? "").toLowerCase().includes(filtros.clienteSearch.toLowerCase())) &&
+    (!filtros.vehiculoId || filtros.vehiculoId === "todos") &&
+    (!filtros.estadoContrato || filtros.estadoContrato === "todos")
+  ).reduce((s, p) => s + cv(p.monto, p.moneda), 0);
+  if (notasTotal) ingresosDetalle.push({ concepto: "Notas de débito cobradas", subtotal: notasTotal });
   const totalIngresos = ingresosDetalle.reduce((s, i) => s + i.subtotal, 0);
   const subarriendosTabla = [...subMap.values()].map(item => ({ ...item,
     utilidad: item.precioVendido - item.costoProveedor,

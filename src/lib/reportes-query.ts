@@ -82,7 +82,7 @@ export async function fetchReportesSummary(
   const in60 = new Date(today.getTime() + 60 * 86400000).toISOString().slice(0, 10);
   const in7 = new Date(today.getTime() + 7 * 86400000).toISOString();
 
-  const [rentas, rentasPrev, clientes, mantenimientos, seguros, pagosPendientesQ, egresosQ, egresosPrevQ, notasDebitoQ, notasDebitoPrevQ, pagosQ] =
+  const [rentas, rentasPrev, clientes, mantenimientos, seguros, pagosPendientesQ, egresosQ, egresosPrevQ, pagosQ] =
     await Promise.all([
       supabase
         .from("rentas")
@@ -133,35 +133,32 @@ export async function fetchReportesSummary(
         .gte("fecha", prevRangeFrom.slice(0, 10))
         .lt("fecha", dateFrom),
 
-      supabase
-        .from("notas_debito")
-        .select("total, moneda, fecha")
-        .eq("estado", "emitida")
-        .gte("fecha", dateFrom)
-        .lte("fecha", dateTo),
-
-      supabase
-        .from("notas_debito")
-        .select("total, moneda, fecha")
-        .eq("estado", "emitida")
-        .gte("fecha", prevRangeFrom.slice(0, 10))
-        .lt("fecha", dateFrom),
-
-      supabase
-        .from("pagos")
-        .select("id, renta_id, fecha, monto, moneda, metodo, estado, deleted_at")
-        .is("deleted_at", null)
-        .eq("estado", "pagado"),
+      (async () => {
+        const full = await supabase.from("pagos")
+          .select("id, renta_id, contrato_id, nota_debito_id, fecha, monto, moneda, metodo, estado, deleted_at")
+          .is("deleted_at", null).eq("estado", "pagado");
+        if (full.error?.code !== "42703") return full;
+        const legacy = await supabase.from("pagos")
+          .select("id, renta_id, contrato_id, fecha, monto, moneda, metodo, estado, deleted_at")
+          .is("deleted_at", null).eq("estado", "pagado");
+        return { data: (legacy.data ?? []).map(p => ({ ...p, nota_debito_id: null })), error: legacy.error };
+      })(),
     ]);
 
-  for (const result of [rentas, pagosQ, egresosQ, notasDebitoQ, notasDebitoPrevQ]) {
+  for (const result of [rentas, pagosQ, egresosQ]) {
     if (result.error) throw result.error;
   }
   const configResult = await supabase.from("configuracion_empresa").select("tipo_cambio").limit(1).maybeSingle();
   if (configResult.error) throw configResult.error;
-  const cobros = desglosarCobros(pagosQ.data ?? [], rentas.data ?? [], Number(configResult.data?.tipo_cambio ?? 36.5));
+  const cobros = desglosarCobros((pagosQ.data ?? []).filter((p): p is typeof p & { renta_id: string } => !!p.renta_id), rentas.data ?? [], Number(configResult.data?.tipo_cambio ?? 36.5));
   const cobrosPeriodo = cobros.filter(p => enPeriodo(p.fecha, dateFrom, dateTo));
   const cobrosPrev = cobros.filter(p => enPeriodo(p.fecha, prevDateFrom, prevDateTo));
+  const cobrosConceptos = (pagosQ.data ?? []).filter(p => !!p.contrato_id);
+  const conceptosPeriodo = cobrosConceptos.filter(p => enPeriodo(p.fecha, dateFrom, dateTo));
+  const conceptosPrev = cobrosConceptos.filter(p => enPeriodo(p.fecha, prevDateFrom, prevDateTo));
+  const abonosNotas = (pagosQ.data ?? []).filter(p => !!p.nota_debito_id);
+  const notasPeriodo = abonosNotas.filter(p => enPeriodo(p.fecha, dateFrom, dateTo));
+  const notasPrev = abonosNotas.filter(p => enPeriodo(p.fecha, prevDateFrom, prevDateTo));
   const rentasCobradas = cobrosPeriodo.map(p => ({ ...p.renta, total: p.ingreso, moneda: p.moneda, fecha_devolucion: p.fecha, costoProveedorUSD: p.costoProveedorUSD }));
   const costosProveedor = costosSubrentaEnPeriodo(cobros, egresosQ.data ?? [], dateFrom, dateTo, Number(configResult.data?.tipo_cambio ?? 36.5));
 
@@ -219,27 +216,27 @@ export async function fetchReportesSummary(
     return acc;
   };
 
-  const ndCurrentByMoneda = sumByMoneda(notasDebitoQ.data ?? []);
-  const ndPrevByMoneda = sumByMoneda(notasDebitoPrevQ.data ?? []);
+  const ndCurrentByMoneda = sumByMoneda(notasPeriodo.map(p => ({ total: p.monto, moneda: p.moneda })));
+  const ndPrevByMoneda = sumByMoneda(notasPrev.map(p => ({ total: p.monto, moneda: p.moneda })));
   const ndTotalCurrent = Object.values(ndCurrentByMoneda).reduce((a, v) => a + v, 0);
   const ndTotalPrev = Object.values(ndPrevByMoneda).reduce((a, v) => a + v, 0);
 
   const ingresosRentasByMoneda = sumByMoneda(cobrosPeriodo.map(p => ({ total: p.ingreso, moneda: p.moneda })));
   const ingresosRentasPrevByMoneda = sumByMoneda(cobrosPrev.map(p => ({ total: p.ingreso, moneda: p.moneda })));
 
-  const ingresosByMoneda = mergeByMoneda(ndCurrentByMoneda, ingresosRentasByMoneda);
-  const ingresosPrevByMoneda = mergeByMoneda(ndPrevByMoneda, ingresosRentasPrevByMoneda);
+  const ingresosByMoneda = mergeByMoneda(mergeByMoneda(ndCurrentByMoneda, ingresosRentasByMoneda), sumByMoneda(conceptosPeriodo.map(p => ({ total: p.monto, moneda: p.moneda }))));
+  const ingresosPrevByMoneda = mergeByMoneda(mergeByMoneda(ndPrevByMoneda, ingresosRentasPrevByMoneda), sumByMoneda(conceptosPrev.map(p => ({ total: p.monto, moneda: p.moneda }))));
 
   const ingresos = Object.values(ingresosByMoneda).reduce((a, v) => a + v, 0);
   const ingresosPrev = Object.values(ingresosPrevByMoneda).reduce((a, v) => a + v, 0);
   const ingresosChange =
     ingresosPrev > 0 ? ((ingresos - ingresosPrev) / ingresosPrev) * 100 : 0;
 
-  let ingresosPropios = ndTotalCurrent;
+  let ingresosPropios = ndTotalCurrent + conceptosPeriodo.reduce((sum, p) => sum + Number(p.monto), 0);
   let ingresosSubrentados = 0;
   let costoSubarriendoTotal = 0;
 
-  const ingresosPropiosByMoneda: Record<string, number> = { ...ndCurrentByMoneda };
+  const ingresosPropiosByMoneda: Record<string, number> = mergeByMoneda(ndCurrentByMoneda, sumByMoneda(conceptosPeriodo.map(p => ({ total: p.monto, moneda: p.moneda }))));
   const ingresosSubrentadosByMoneda: Record<string, number> = {};
 
   const diasRenta = (r: { fecha_inicio?: string; fecha_devolucion?: string }): number =>
@@ -293,6 +290,18 @@ export async function fetchReportesSummary(
     const rMoneda = (r.moneda ?? "NIO") as string;
     ingresosMes[key].total += val;
     ingresosMes[key].moneda[rMoneda] = (ingresosMes[key].moneda[rMoneda] ?? 0) + val;
+  }
+  for (const p of conceptosPeriodo) {
+    const key = fechaContable(p.fecha).slice(0, 7);
+    if (!ingresosMes[key]) ingresosMes[key] = { total: 0, moneda: {} };
+    ingresosMes[key].total += Number(p.monto);
+    ingresosMes[key].moneda[p.moneda] = (ingresosMes[key].moneda[p.moneda] ?? 0) + Number(p.monto);
+  }
+  for (const p of notasPeriodo) {
+    const key = fechaContable(p.fecha).slice(0, 7);
+    if (!ingresosMes[key]) ingresosMes[key] = { total: 0, moneda: {} };
+    ingresosMes[key].total += Number(p.monto);
+    ingresosMes[key].moneda[p.moneda] = (ingresosMes[key].moneda[p.moneda] ?? 0) + Number(p.monto);
   }
   const ingresosSeries = Object.entries(ingresosMes)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -352,10 +361,10 @@ export async function fetchReportesSummary(
     tarjeta: "Tarjeta",
   };
   const metodosMap = new Map<string, { total: number; moneda: Record<string, number> }>();
-  for (const p of cobrosPeriodo) {
+  for (const p of [...cobrosPeriodo.map(p => ({ ...p, montoIngreso: p.ingreso })), ...conceptosPeriodo.map(p => ({ ...p, montoIngreso: Number(p.monto) })), ...notasPeriodo.map(p => ({ ...p, montoIngreso: Number(p.monto) }))]) {
     const metodo = (p.metodo ?? "efectivo") as string;
     const pMoneda = (p.moneda ?? "NIO") as string;
-    const val = p.ingreso;
+    const val = p.montoIngreso;
     const entry = metodosMap.get(metodo) ?? { total: 0, moneda: {} };
     entry.total += val;
     entry.moneda[pMoneda] = (entry.moneda[pMoneda] ?? 0) + val;

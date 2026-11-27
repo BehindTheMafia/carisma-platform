@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { convertCurrency, type Moneda } from "./format.ts";
 
 export const conceptoFacturaSchema = z.object({
   id: z.string().min(1),
@@ -31,6 +32,15 @@ export function calcularImporteConcepto(concepto: Pick<ConceptoFactura, "cantida
 
 export function calcularTotalConceptos(conceptos: ConceptoFactura[] = []): number {
   return conceptos.reduce((total, concepto) => total + Math.round(calcularImporteConcepto(concepto) * 100), 0) / 100;
+}
+
+/** Los abonos en otra moneda se convierten a la tasa guardada en la factura. */
+export function saldoFacturaConceptos(
+  total: number, monedaFactura: Moneda, tasa: number,
+  pagos: ReadonlyArray<{ monto: number; moneda: Moneda }>,
+): { pagado: number; saldo: number } {
+  const pagado = pagos.reduce((sum, pago) => sum + convertCurrency(Number(pago.monto), pago.moneda, monedaFactura, tasa), 0);
+  return { pagado, saldo: Math.max(0, Math.round((total - pagado) * 100) / 100) };
 }
 
 export function nuevoConceptoFactura(): ConceptoFactura {
