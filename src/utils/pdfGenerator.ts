@@ -980,8 +980,12 @@ async function genContrato(data) {
     try {
         const vehicleImg = await getVehicleImage(data.tipoVehiculo || 'SUV');
         if (vehicleImg && vehicleImg.w > 1) {
-            const vWidth = 180;
+            let vWidth = 180;
             let vHeight = (vehicleImg.h / vehicleImg.w) * vWidth;
+            if (vHeight > 90) {
+                vWidth *= 90 / vHeight;
+                vHeight = 90;
+            }
             const vX = (W - vWidth) / 2;
             doc.addImage(vehicleImg.data, 'PNG', vX, y, vWidth, vHeight);
             y += vHeight + 5;
