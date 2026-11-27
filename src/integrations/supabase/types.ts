@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       clientes: {
         Row: {
+          cedula_fotos: Json
           ciudad: string | null
           contacto_emergencia_nombre: string | null
           contacto_emergencia_telefono: string | null
@@ -37,6 +38,7 @@ export type Database = {
           whatsapp: string | null
         }
         Insert: {
+          cedula_fotos?: Json
           ciudad?: string | null
           contacto_emergencia_nombre?: string | null
           contacto_emergencia_telefono?: string | null
@@ -58,6 +60,7 @@ export type Database = {
           whatsapp?: string | null
         }
         Update: {
+          cedula_fotos?: Json
           ciudad?: string | null
           contacto_emergencia_nombre?: string | null
           contacto_emergencia_telefono?: string | null
@@ -237,6 +240,7 @@ export type Database = {
           condicion_pago: string
           created_at: string
           created_by: string | null
+          deleted_at: string | null
           descripcion_general: string | null
           estado: string
           factura_id: string | null
@@ -256,6 +260,7 @@ export type Database = {
           condicion_pago?: string
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           descripcion_general?: string | null
           estado?: string
           factura_id?: string | null
@@ -275,6 +280,7 @@ export type Database = {
           condicion_pago?: string
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           descripcion_general?: string | null
           estado?: string
           factura_id?: string | null
@@ -485,6 +491,8 @@ export type Database = {
       }
       pagos: {
         Row: {
+          contrato_id: string | null
+          nota_debito_id: string | null
           created_at: string
           deleted_at: string | null
           estado: Database["public"]["Enums"]["pago_estado"]
@@ -495,9 +503,11 @@ export type Database = {
           monto: number
           observaciones: string | null
           referencia: string | null
-          renta_id: string
+          renta_id: string | null
         }
         Insert: {
+          contrato_id?: string | null
+          nota_debito_id?: string | null
           created_at?: string
           deleted_at?: string | null
           estado?: Database["public"]["Enums"]["pago_estado"]
@@ -508,9 +518,11 @@ export type Database = {
           monto: number
           observaciones?: string | null
           referencia?: string | null
-          renta_id: string
+          renta_id?: string | null
         }
         Update: {
+          contrato_id?: string | null
+          nota_debito_id?: string | null
           created_at?: string
           deleted_at?: string | null
           estado?: Database["public"]["Enums"]["pago_estado"]
@@ -521,9 +533,23 @@ export type Database = {
           monto?: number
           observaciones?: string | null
           referencia?: string | null
-          renta_id?: string
+          renta_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "pagos_nota_debito_id_fkey"
+            columns: ["nota_debito_id"]
+            isOneToOne: false
+            referencedRelation: "notas_debito"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pagos_renta_id_fkey"
             columns: ["renta_id"]
