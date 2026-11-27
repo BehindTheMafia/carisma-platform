@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Plus, Search, Receipt, Download, Trash2, Printer, Pencil, SlidersHorizontal, Eye, Copy, Ban, X,
+  Plus, Search, Receipt, Download, Trash2, Printer, Pencil, SlidersHorizontal, Eye, Copy, Ban, X, CreditCard,
 } from "lucide-react";
 import { formatDate, formatCurrencyDual, type Moneda } from "@/lib/format";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import { NotaDebitoForm } from "./NotaDebitoForm";
 import { NotaDebitoCalibrationMode } from "./NotaDebitoCalibrationMode";
 import { generateNotaDebitoPDF } from "@/utils/pdfGeneratorNotaDebito";
 import { getNotaDebitoCalibrationOffsets } from "@/utils/calibrationNotaDebitoStorage";
+import { NotaDebitoPayments } from "./NotaDebitoPayments";
 
 const ESTADO_COLORS: Record<NotaDebitoEstado, string> = {
   borrador: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
@@ -52,6 +53,7 @@ export function NotasDebitoPage({
   const pageSize = 15;
 
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [payModalNota, setPayModalNota] = useState<NotaDebitoRow | null>(null);
   const [calibrationOpen, setCalibrationOpen] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
 
@@ -64,6 +66,13 @@ export function NotasDebitoPage({
     staleTime: 5 * 60 * 1000,
   });
   const tipoCambio = config?.tipoCambio ?? 36.5;
+  const { data: notePaymentsReady = false } = useQuery({
+    queryKey: ["nota-debito-payments-schema"],
+    queryFn: async () => {
+      const { error } = await supabase.from("pagos").select("nota_debito_id").limit(0);
+      return !error;
+    },
+  });
 
   // List Query
   const { data, isLoading, isError, error } = useQuery({
@@ -72,6 +81,7 @@ export function NotasDebitoPage({
       let q = supabase
         .from("notas_debito")
         .select("*, cliente:clientes(nombre, documento)", { count: "exact" })
+        .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
       if (search) {
@@ -92,10 +102,28 @@ export function NotasDebitoPage({
     },
   });
 
+  const noteIds = (data?.data ?? []).map((note) => note.id);
+  const { data: paidByNote = new Map<string, number>() } = useQuery({
+    queryKey: ["pagos-notas-list", noteIds.join(",")],
+    enabled: notePaymentsReady && noteIds.length > 0,
+    queryFn: async () => {
+      const { data: pagos, error: paymentsError } = await supabase.from("pagos")
+        .select("nota_debito_id,monto").in("nota_debito_id", noteIds)
+        .eq("estado", "pagado").is("deleted_at", null);
+      if (paymentsError) throw paymentsError;
+      const totals = new Map<string, number>();
+      for (const pago of pagos ?? []) {
+        if (pago.nota_debito_id) totals.set(pago.nota_debito_id, (totals.get(pago.nota_debito_id) ?? 0) + Number(pago.monto));
+      }
+      return totals;
+    },
+  });
+
   // Delete Mutation
   const deleteM = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("notas_debito").delete().eq("id", id);
+      const { error } = await supabase.from("notas_debito")
+        .update({ deleted_at: new Date().toISOString() }).eq("id", id).is("deleted_at", null);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -105,7 +133,7 @@ export function NotasDebitoPage({
       toast.success("Nota de Débito eliminada");
       setConfirmDelete(null);
     },
-    onError: () => toast.error("No se pudo eliminar la Nota de Débito"),
+    onError: (error: Error) => toast.error(error.message.includes("abonos") ? "La nota tiene abonos. Anulalos antes de retirarla." : error.message),
   });
 
   // Re-imprimir / Generar PDF desde el listado
@@ -262,26 +290,27 @@ export function NotasDebitoPage({
                 <th className="px-4 py-3 font-semibold text-muted-foreground">Cliente</th>
                 <th className="px-4 py-3 font-semibold text-muted-foreground">Fecha</th>
                 <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Total</th>
-                <th className="px-4 py-3 font-semibold text-muted-foreground text-center">Estado</th>
+                <th className="px-4 py-3 font-semibold text-muted-foreground text-center">Documento</th>
+                <th className="px-4 py-3 font-semibold text-muted-foreground text-center">Pago</th>
                 <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                     Cargando Notas de Débito...
                   </td>
                 </tr>
               ) : isError ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-destructive">
+                  <td colSpan={7} className="px-4 py-12 text-center text-destructive">
                     Error: {(error as Error)?.message}
                   </td>
                 </tr>
               ) : data?.data.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                     No se encontraron Notas de Débito
                   </td>
                 </tr>
@@ -304,8 +333,20 @@ export function NotasDebitoPage({
                         {row.estado.toUpperCase()}
                       </Badge>
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      {row.estado === "emitida" && notePaymentsReady ? (() => {
+                        const paid = paidByNote.get(row.id) ?? 0;
+                        const pending = Math.round((Number(row.total) - paid) * 100) / 100;
+                        return <Badge variant="outline" className={Number(row.total) > 0 && pending <= 0 ? "text-emerald-700 border-emerald-400" : paid > 0 ? "text-amber-700 border-amber-400" : "text-muted-foreground"}>
+                          {Number(row.total) > 0 && pending <= 0 ? "Pagada" : paid > 0 ? "Parcial" : "Sin pagar"}
+                        </Badge>;
+                      })() : "—"}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        {row.estado === "emitida" && <Button variant="outline" size="sm" className="gap-1" disabled={!notePaymentsReady} title={notePaymentsReady ? "Registrar y consultar abonos" : "Pagos de notas pendientes de activar en la base de datos"} onClick={() => setPayModalNota(row)}>
+                          <CreditCard className="size-4" /> Pagos
+                        </Button>}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -410,12 +451,19 @@ export function NotasDebitoPage({
       </Dialog>
 
       {/* Delete Modal */}
+      <Dialog open={!!payModalNota} onOpenChange={(open) => { if (!open) setPayModalNota(null); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Pagos de la nota de débito</DialogTitle></DialogHeader>
+          {payModalNota && <NotaDebitoPayments nota={payModalNota} />}
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar esta Nota de Débito?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción eliminará el registro permanentemente de la base de datos.
+              La nota se retirará del listado. Sus registros históricos se conservarán.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
