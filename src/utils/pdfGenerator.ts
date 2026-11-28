@@ -66,6 +66,12 @@ export function getCustomLabel(key: string, defaultLabel: string, data: any): st
     return defaultLabel;
 }
 
+export function getViajeDescription(data: any): string {
+    const ruta = [data.viajeOrigen?.trim(), data.viajeDestino?.trim()].filter(Boolean).join(' - ');
+    const horas = [data.viajeHoraInicio, data.viajeHoraFin].filter(Boolean).join(' - ');
+    return ['Viaje', ruta, horas ? `(${horas})` : ''].filter(Boolean).join(' ');
+}
+
 export const isFilled = (val) => val !== undefined && val !== '' && val !== null;
 
 const fmtDateStr = (dateStr) => {
@@ -603,21 +609,22 @@ async function drawMoneySection(doc, W, ML, y, data) {
     const porConceptos = esFacturaPorConceptos(data);
     const sub = porConceptos ? calcularTotalConceptos(data.conceptosFactura) : (parseFloat(data.dias) || 0) * (parseFloat(data.precio) || 0);
 
-    let choferTotal = 0, viaticosTotal = 0, hospedajeTotal = 0;
+    let choferTotal = 0, viaticosTotal = 0, hospedajeTotal = 0, viajeTotal = 0;
     if (!porConceptos && data.hasOtrosServicios) {
         choferTotal = (parseFloat(data.choferDias) || 0) * (parseFloat(data.choferPrecio) || 0);
         viaticosTotal = (parseFloat(data.viaticosDias) || 0) * (parseFloat(data.viaticosPrecio) || 0);
         hospedajeTotal = (parseFloat(data.hospedajeDias) || 0) * (parseFloat(data.hospedajePrecio) || 0);
+        viajeTotal = (parseFloat(data.viajeDias) || 0) * (parseFloat(data.viajePrecio) || 0);
     }
 
     const deposito = porConceptos ? 0 : parseFloat(data.deposito) || 0;
 
     const tasa = parseFloat(data.tasa) || 36.6243;
     const conceptosNIO = porConceptos && data.monedaConceptos === 'NIO';
-    const totalUSD = conceptosNIO ? sub / tasa : sub + deposito + choferTotal + viaticosTotal + hospedajeTotal;
+    const totalUSD = conceptosNIO ? sub / tasa : sub + deposito + choferTotal + viaticosTotal + hospedajeTotal + viajeTotal;
     const totalNIO = conceptosNIO ? sub : totalUSD * tasa;
 
-    const hasExtras = choferTotal > 0 || viaticosTotal > 0 || hospedajeTotal > 0;
+    const hasExtras = choferTotal > 0 || viaticosTotal > 0 || hospedajeTotal > 0 || viajeTotal > 0;
 
     const blank = v => {
         const val = parseFloat(v);
@@ -636,6 +643,8 @@ async function drawMoneySection(doc, W, ML, y, data) {
                      !data.viaticosPrecio &&
                      !data.hospedajeDias &&
                      !data.hospedajePrecio &&
+                     !data.viajeDias &&
+                     !data.viajePrecio &&
                      !data.deposito;
 
     const c = (name) => esBlanco ? '' : name;
@@ -645,6 +654,7 @@ async function drawMoneySection(doc, W, ML, y, data) {
     const hasChof = (parseFloat(data.choferDias) > 0 || parseFloat(data.choferPrecio) > 0) || !!data.choferLabel;
     const hasViat = (parseFloat(data.viaticosDias) > 0 || parseFloat(data.viaticosPrecio) > 0) || !!data.viaticosLabel;
     const hasHosp = (parseFloat(data.hospedajeDias) > 0 || parseFloat(data.hospedajePrecio) > 0) || !!data.hospedajeLabel;
+    const hasViaje = !!data.hasOtrosServicios && (parseFloat(data.viajeDias) > 0 || parseFloat(data.viajePrecio) > 0);
 
     const bodyRows = porConceptos ? (data.conceptosFactura || []).map(item => [
         item.descripcion.trim(), String(item.cantidad), conceptosNIO ? fmtc(item.precioUnitario) : fmt(item.precioUnitario), conceptosNIO ? fmtc(calcularImporteConcepto(item)) : fmt(calcularImporteConcepto(item)),
@@ -664,6 +674,7 @@ async function drawMoneySection(doc, W, ML, y, data) {
         hasExtras
             ? [hasHosp ? c(getCustomLabel('hospedaje', 'Hospedaje', data)) : '', hasHosp ? blank(data.hospedajeDias) : '', hasHosp ? fmt(data.hospedajePrecio) : '', '', hasHosp ? fmt(hospedajeTotal) : '']
             : [hasHosp ? c(getCustomLabel('hospedaje', 'Hospedaje', data)) : '', hasHosp ? blank(data.hospedajeDias) : '', hasHosp ? fmt(data.hospedajePrecio) : '', hasHosp ? fmt(hospedajeTotal) : ''],
+        ...(hasViaje ? [[c(getViajeDescription(data)), blank(data.viajeDias), fmt(data.viajePrecio), '', fmt(viajeTotal)]] : []),
     ];
 
     const tableHead = porConceptos ? [['Concepto', 'Cantidad', 'Precio unitario', 'Importe']] : hasExtras
@@ -819,14 +830,15 @@ async function genProforma(data) {
     let sub = 0;
     (data.vehiculos || []).forEach(v => sub += (parseFloat(v.days) || 0) * (parseFloat(v.price) || 0));
 
-    let choferTotal = 0, viaticosTotal = 0, hospedajeTotal = 0;
+    let choferTotal = 0, viaticosTotal = 0, hospedajeTotal = 0, viajeTotal = 0;
     if (data.hasOtrosServicios) {
         choferTotal = (parseFloat(data.choferDias) || 0) * (parseFloat(data.choferPrecio) || 0);
         viaticosTotal = (parseFloat(data.viaticosDias) || 0) * (parseFloat(data.viaticosPrecio) || 0);
         hospedajeTotal = (parseFloat(data.hospedajeDias) || 0) * (parseFloat(data.hospedajePrecio) || 0);
+        viajeTotal = (parseFloat(data.viajeDias) || 0) * (parseFloat(data.viajePrecio) || 0);
     }
 
-    const total = sub + (parseFloat(data.deposito) || 0) + choferTotal + viaticosTotal + hospedajeTotal;
+    const total = sub + (parseFloat(data.deposito) || 0) + choferTotal + viaticosTotal + hospedajeTotal + viajeTotal;
 
     const unifiedBody = [
         ...(data.vehiculos || []).map(v => [
@@ -842,6 +854,7 @@ async function genProforma(data) {
     if (choferTotal > 0) unifiedBody.push(['Servicio de Chofer', '', '', '', '', fmt(choferTotal)]);
     if (viaticosTotal > 0) unifiedBody.push(['Viáticos', '', '', '', '', fmt(viaticosTotal)]);
     if (hospedajeTotal > 0) unifiedBody.push(['Hospedaje', '', '', '', '', fmt(hospedajeTotal)]);
+    if (viajeTotal > 0) unifiedBody.push([getViajeDescription(data), '', '', String(data.viajeDias), fmt(data.viajePrecio), fmt(viajeTotal)]);
 
     autoTable(doc, {
         startY: y,

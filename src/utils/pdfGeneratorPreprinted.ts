@@ -2,7 +2,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { type CalibrationOffsets, DEFAULT_OFFSETS } from './calibrationStorage';
-import { getLogoData, getCustomLabel } from './pdfGenerator';
+import { getLogoData, getCustomLabel, getViajeDescription } from './pdfGenerator';
 import { esFacturaPorConceptos, calcularTotalConceptos, calcularImporteConcepto, facturaConceptosSchema } from '@/lib/factura-conceptos';
 
 const BLACK = [0, 0, 0];
@@ -243,19 +243,20 @@ export async function generateFacturaPreprinted(data, calibrationOffsets?: Calib
     const porConceptos = esFacturaPorConceptos(data);
     const sub = porConceptos ? calcularTotalConceptos(data.conceptosFactura) : (parseFloat(data.dias) || 0) * (parseFloat(data.precio) || 0);
 
-    let choferTotal = 0, viaticosTotal = 0, hospedajeTotal = 0;
+    let choferTotal = 0, viaticosTotal = 0, hospedajeTotal = 0, viajeTotal = 0;
     if (!porConceptos && data.hasOtrosServicios) {
         choferTotal = (parseFloat(data.choferDias) || 0) * (parseFloat(data.choferPrecio) || 0);
         viaticosTotal = (parseFloat(data.viaticosDias) || 0) * (parseFloat(data.viaticosPrecio) || 0);
         hospedajeTotal = (parseFloat(data.hospedajeDias) || 0) * (parseFloat(data.hospedajePrecio) || 0);
+        viajeTotal = (parseFloat(data.viajeDias) || 0) * (parseFloat(data.viajePrecio) || 0);
     }
 
     const deposito = porConceptos ? 0 : parseFloat(data.deposito) || 0;
     const tasa = parseFloat(data.tasa) || 36.6243;
     const conceptosNIO = porConceptos && data.monedaConceptos === 'NIO';
-    const totalUSD = conceptosNIO ? sub / tasa : sub + deposito + choferTotal + viaticosTotal + hospedajeTotal;
+    const totalUSD = conceptosNIO ? sub / tasa : sub + deposito + choferTotal + viaticosTotal + hospedajeTotal + viajeTotal;
     const totalNIO = conceptosNIO ? sub : totalUSD * tasa;
-    const hasExtras = choferTotal > 0 || viaticosTotal > 0 || hospedajeTotal > 0;
+    const hasExtras = choferTotal > 0 || viaticosTotal > 0 || hospedajeTotal > 0 || viajeTotal > 0;
     const blank = v => {
         const val = parseFloat(v);
         if (!val) return '';
@@ -266,6 +267,7 @@ export async function generateFacturaPreprinted(data, calibrationOffsets?: Calib
     const hasChof = (parseFloat(data.choferDias) > 0 || parseFloat(data.choferPrecio) > 0) || !!data.choferLabel;
     const hasViat = (parseFloat(data.viaticosDias) > 0 || parseFloat(data.viaticosPrecio) > 0) || !!data.viaticosLabel;
     const hasHosp = (parseFloat(data.hospedajeDias) > 0 || parseFloat(data.hospedajePrecio) > 0) || !!data.hospedajeLabel;
+    const hasViaje = !!data.hasOtrosServicios && (parseFloat(data.viajeDias) > 0 || parseFloat(data.viajePrecio) > 0);
 
     // Identical body rows to original — empty strings '' for empty values
     const bodyRows = porConceptos ? (data.conceptosFactura || []).map(item => [
@@ -286,6 +288,7 @@ export async function generateFacturaPreprinted(data, calibrationOffsets?: Calib
         hasExtras
             ? [hasHosp ? getCustomLabel('hospedaje', 'Hospedaje', data) : '', hasHosp ? blank(data.hospedajeDias) : '', hasHosp ? fmt(data.hospedajePrecio) : '', '', hasHosp ? fmt(hospedajeTotal) : '']
             : [hasHosp ? getCustomLabel('hospedaje', 'Hospedaje', data) : '', hasHosp ? blank(data.hospedajeDias) : '', hasHosp ? fmt(data.hospedajePrecio) : '', hasHosp ? fmt(hospedajeTotal) : ''],
+        ...(hasViaje ? [[getViajeDescription(data), blank(data.viajeDias), fmt(data.viajePrecio), '', fmt(viajeTotal)]] : []),
     ];
 
     // Same header text as original (affects column width calculation) — invisible via headStyles
