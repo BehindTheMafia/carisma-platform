@@ -100,6 +100,12 @@ const initialFormData: FormData = {
   viaticosPrecio: 0,
   hospedajeDias: 0,
   hospedajePrecio: 0,
+  viajeDias: 0,
+  viajePrecio: 0,
+  viajeOrigen: "",
+  viajeDestino: "",
+  viajeHoraInicio: "",
+  viajeHoraFin: "",
   tasa: 36.6243,
   nota: "El pago total deberá ser cancelado al finalizar el contrato.",
   obs: "",
@@ -165,6 +171,12 @@ const emptyFormData: FormData = {
   viaticosPrecio: 0,
   hospedajeDias: 0,
   hospedajePrecio: 0,
+  viajeDias: 0,
+  viajePrecio: 0,
+  viajeOrigen: "",
+  viajeDestino: "",
+  viajeHoraInicio: "",
+  viajeHoraFin: "",
   tasa: 36.6243,
   nota: "El pago total deberá ser cancelado al finalizar el contrato.",
   obs: "",
@@ -482,6 +494,12 @@ export function ContratosPage({ editId, rentaId }: { editId?: string; rentaId?: 
 
   const persistDocument = async () => {
     if (!validarConceptos()) return;
+    if (!esFacturaPorConceptos(formData) && formData.hasOtrosServicios && (Number(formData.viajeDias) > 0 || Number(formData.viajePrecio) > 0)) {
+      if (!Number.isInteger(Number(formData.viajeDias)) || Number(formData.viajeDias) <= 0 || Number(formData.viajePrecio) <= 0 || !formData.viajeOrigen?.trim() || !formData.viajeDestino?.trim() || !formData.viajeHoraInicio || !formData.viajeHoraFin) {
+        toast.error("Completá días, precio por día, lugares y horas del viaje antes de guardar");
+        return;
+      }
+    }
     if (docType === "factura" && !formData.facturaNum.trim()) {
       toast.error("Escribí el número de factura antes de guardar");
       return;

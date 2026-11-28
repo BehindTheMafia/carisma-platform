@@ -71,6 +71,12 @@ export interface FormData {
   viaticosPrecio: number;
   hospedajeDias: number;
   hospedajePrecio: number;
+  viajeDias?: number;
+  viajePrecio?: number;
+  viajeOrigen?: string;
+  viajeDestino?: string;
+  viajeHoraInicio?: string;
+  viajeHoraFin?: string;
   tasa: number;
   nota: string;
   obs: string;
@@ -233,6 +239,9 @@ export function ContratoForm({
     extraCost +=
       (parseFloat(String(formData.hospedajeDias)) || 0) *
       (parseFloat(String(formData.hospedajePrecio)) || 0);
+    extraCost +=
+      (parseFloat(String(formData.viajeDias)) || 0) *
+      (parseFloat(String(formData.viajePrecio)) || 0);
   }
 
   const tasa = parseFloat(String(formData.tasa)) || 0;
@@ -916,7 +925,7 @@ export function ContratoForm({
             {formData.hasOtrosServicios ? <X className="size-4" /> : <Plus className="size-4" />}
             {formData.hasOtrosServicios
               ? "Desactivar Servicios Extra"
-              : "Añadir Servicios Extra (Chofer, Viáticos, Hospedaje)"}
+              : "Añadir Servicios Extra (Chofer, Viáticos, Hospedaje, Viaje)"}
           </button>
         </div>
 
@@ -1064,6 +1073,35 @@ export function ContratoForm({
                     className="w-full bg-background border border-input text-foreground rounded-lg px-2 py-1 text-xs outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs mt-1"
                   />
                 </div>
+              </div>
+              {/* Viaje */}
+              <div className="bg-card p-3 rounded-lg border border-border shadow-xs sm:col-span-2 lg:col-span-3">
+                <h4 className="text-xs font-bold text-foreground uppercase mb-2">Viaje</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {([
+                    ["viajeOrigen", "Lugar inicial", "text", "Ej. Managua"],
+                    ["viajeDestino", "Lugar final", "text", "Ej. Masaya"],
+                    ["viajeHoraInicio", "Hora de inicio", "time", ""],
+                    ["viajeHoraFin", "Hora de finalización", "time", ""],
+                    ["viajeDias", "Días", "number", ""],
+                    ["viajePrecio", "Precio por día ($)", "number", ""],
+                  ] as const).map(([name, label, type, placeholder]) => (
+                    <label key={name} className="block text-[10px] text-muted-foreground font-bold uppercase">
+                      {label}
+                      <input
+                        type={type}
+                        name={name}
+                        value={formData[name] ?? ""}
+                        onChange={handleChange}
+                        placeholder={placeholder}
+                        min={type === "number" ? "0" : undefined}
+                        step={name === "viajePrecio" ? "0.01" : name === "viajeDias" ? "1" : undefined}
+                        className="w-full bg-background border border-input text-foreground rounded-lg px-2 py-1 text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all shadow-xs mt-1"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">El importe del viaje es días × precio por día.</p>
               </div>
             </div>
           </div>
